@@ -142,7 +142,10 @@ export class RslApp extends LitElement {
         display: none !important;
       }
 
+      /* Explicit placement: hiding a panel sets display:none, which would otherwise
+         pull the remaining items into the wrong grid tracks. */
       .rail {
+        grid-column: 1;
         min-height: 0;
         overflow-y: auto;
         padding: 10px;
@@ -151,7 +154,12 @@ export class RslApp extends LitElement {
       }
 
       rsl-viewport {
+        grid-column: 2;
         min-width: 0;
+      }
+
+      rsl-dock {
+        grid-column: 3;
       }
 
       .footer-note {
@@ -170,9 +178,15 @@ export class RslApp extends LitElement {
 
       @media (max-width: 1150px) {
         main {
-          grid-template-columns: 1fr;
+          grid-template-columns: 1fr !important;
           grid-template-rows: auto minmax(320px, 1fr) auto;
           overflow-y: auto;
+        }
+
+        .rail,
+        rsl-viewport,
+        rsl-dock {
+          grid-column: 1;
         }
 
         .rail {
@@ -222,6 +236,7 @@ export class RslApp extends LitElement {
       this.appState = state;
       this.scheduleRender();
     });
+    window.addEventListener('keydown', this.onKeyDown);
     await this.library.load();
     this.ready = true;
     // Passes restored from localStorage (or the defaults) may predate the shader
@@ -233,8 +248,21 @@ export class RslApp extends LitElement {
 
   override disconnectedCallback(): void {
     this.unsubscribe?.();
+    window.removeEventListener('keydown', this.onKeyDown);
     super.disconnectedCallback();
   }
+
+  /** `[` and `]` toggle the side panels, unless the user is typing. */
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.composedPath()[0] as HTMLElement | undefined;
+    const tag = target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
+      return;
+    }
+    if (event.key === '[') store.update({ showRail: !store.value.showRail });
+    else if (event.key === ']') store.update({ showDock: !store.value.showDock });
+  };
 
   private onViewportReady(event: CustomEvent<HTMLCanvasElement[]>): void {
     this.pipelines = event.detail.map((canvas) => new ShaderPipeline(canvas));
@@ -446,6 +474,22 @@ export class RslApp extends LitElement {
           <span class="sub">NextUI · shader pipeline bench</span>
         </div>
         <span class="spacer"></span>
+        <div class="seg">
+          <button
+            aria-pressed=${state.showRail}
+            title="Toggle the left panel  ( [ )"
+            @click=${() => store.update({ showRail: !state.showRail })}
+          >
+            ▤ Panels
+          </button>
+          <button
+            aria-pressed=${state.showDock}
+            title="Toggle the right panel  ( ] )"
+            @click=${() => store.update({ showDock: !state.showDock })}
+          >
+            ▤ CFG
+          </button>
+        </div>
         <span class="chip">${this.shaderNames.length} shaders</span>
         <button class="ghost" title="Reset the lab to its defaults" @click=${this.resetAll}>
           ↺ Reset
@@ -455,8 +499,12 @@ export class RslApp extends LitElement {
         </span>
       </header>
 
-      <main>
-        <div class="rail boot" style="animation-delay:60ms">
+      <main
+        style=${`grid-template-columns:${state.showRail ? 'var(--rail)' : '0'} minmax(0, 1fr) ${
+          state.showDock ? 'var(--dock)' : '0'
+        }`}
+      >
+        <div class="rail boot" style="animation-delay:60ms" ?hidden=${!state.showRail}>
           <rsl-source-panel
             .source=${this.source}
             .system=${state.sourceSystem}
@@ -589,6 +637,7 @@ export class RslApp extends LitElement {
         <rsl-dock
           class="boot"
           style="animation-delay:180ms"
+          ?hidden=${!state.showDock}
           .cfgText=${this.cfgText}
           .presets=${BUNDLED_PRESETS}
           .passes=${this.passInfos}
