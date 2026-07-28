@@ -106,6 +106,13 @@ export class RslDock extends LitElement {
         flex-wrap: wrap;
       }
 
+      .presets {
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        padding: 8px;
+        background: rgba(125, 255, 155, 0.03);
+      }
+
       .pass-card {
         border: 1px solid var(--line);
         border-radius: 2px;
@@ -205,6 +212,7 @@ export class RslDock extends LitElement {
   ];
 
   @property({ type: String }) cfgText = '';
+  @property({ attribute: false }) presets: string[] = [];
   @property({ attribute: false }) passes: PassRenderInfo[] = [];
   @property({ attribute: false }) issues: CompileIssue[] = [];
   @property({ attribute: false }) warnings: string[] = [];
@@ -215,6 +223,20 @@ export class RslDock extends LitElement {
 
   private emit<T>(type: string, detail: T): void {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+  }
+
+  /** Presets grouped as "Presets" (root cfgs) and one group per `sets/<SYSTEM>` folder. */
+  private get presetGroups(): [string, string[]][] {
+    const groups = new Map<string, string[]>();
+    for (const path of this.presets) {
+      const parts = path.split('/');
+      const group =
+        parts.length === 1 ? 'Presets' : parts.length === 2 ? 'Sets' : `Sets · ${parts[1]}`;
+      const list = groups.get(group);
+      if (list) list.push(path);
+      else groups.set(group, [path]);
+    }
+    return [...groups.entries()];
   }
 
   private async copyCfg(): Promise<void> {
@@ -277,6 +299,36 @@ export class RslDock extends LitElement {
     const text = this.draft ?? this.cfgText;
     const dirty = this.draft !== undefined && this.draft !== this.cfgText;
     return html`
+      ${this.presets.length > 0
+        ? html`
+            <div class="presets">
+              <label for="preset">NextUI stock presets</label>
+              <select
+                id="preset"
+                name="preset"
+                @change=${(e: Event) => {
+                  const select = e.target as HTMLSelectElement;
+                  const path = select.value;
+                  select.selectedIndex = 0;
+                  if (path) this.emit('preset-load', path);
+                }}
+              >
+                <option value="">— load a preset —</option>
+                ${this.presetGroups.map(
+                  ([group, paths]) => html`
+                    <optgroup label=${group}>
+                      ${paths.map(
+                        (path) => html`
+                          <option value=${path}>${path.split('/').pop()?.replace('.cfg', '')}</option>
+                        `
+                      )}
+                    </optgroup>
+                  `
+                )}
+              </select>
+            </div>
+          `
+        : nothing}
       <div class="toolbar">
         <button class="primary" @click=${this.download}>⇩ Save .cfg</button>
         <button @click=${this.copyCfg}>${this.copied ? '✓ Copied' : '⧉ Copy'}</button>

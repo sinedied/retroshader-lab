@@ -10,6 +10,7 @@ import {
 import { OUTPUT_PRESETS, CORE_ASPECTS } from '../core/scaling.js';
 import { SCALING_MODES, FILTERS } from '../core/types.js';
 import type { FilterName, ScalingMode, SourceImage } from '../core/types.js';
+import type { SampleEntry } from '../core/shader-library.js';
 
 /** Source image selection + output/screen-scaling settings (NextUI frontend options). */
 @customElement('rsl-source-panel')
@@ -88,7 +89,7 @@ export class RslSourcePanel extends LitElement {
   @property({ type: String }) system = 'gb';
   @property({ type: String }) pattern: PatternKind = 'scene';
   @property({ type: String }) sampleFile: string | undefined = undefined;
-  @property({ attribute: false }) samples: string[] = [];
+  @property({ attribute: false }) samples: SampleEntry[] = [];
   @property({ type: String }) uploadedName: string | undefined = undefined;
   @property({ type: Number }) outputWidth = 1024;
   @property({ type: Number }) outputHeight = 768;
@@ -97,6 +98,18 @@ export class RslSourcePanel extends LitElement {
   @property({ type: Number }) coreAspect = 4 / 3;
 
   @state() private dragOver = false;
+
+  /** Screenshots grouped into `<optgroup>`s, in the platform order of the manifest. */
+  private get samplesByPlatform(): [string, SampleEntry[]][] {
+    const groups = new Map<string, SampleEntry[]>();
+    for (const entry of this.samples) {
+      const key = entry.platform ?? 'Other';
+      const list = groups.get(key);
+      if (list) list.push(entry);
+      else groups.set(key, [entry]);
+    }
+    return [...groups.entries()];
+  }
 
   private emit<T>(type: string, detail: T): void {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -210,7 +223,7 @@ export class RslSourcePanel extends LitElement {
           ${this.samples.length > 0
             ? html`
                 <div>
-                  <label for="sample">Bundled screenshots</label>
+                  <label for="sample">Game screenshots</label>
                   <select
                     id="sample"
                     name="sample"
@@ -218,9 +231,19 @@ export class RslSourcePanel extends LitElement {
                       this.emit('source-sample', (e.target as HTMLSelectElement).value)}
                   >
                     <option value="" ?selected=${!this.sampleFile}>— generated pattern —</option>
-                    ${this.samples.map(
-                      (name) => html`
-                        <option value=${name} ?selected=${name === this.sampleFile}>${name}</option>
+                    ${this.samplesByPlatform.map(
+                      ([platform, entries]) => html`
+                        <optgroup label=${platform}>
+                          ${entries.map(
+                            (entry) => html`
+                              <option value=${entry.file} ?selected=${entry.file === this.sampleFile}>
+                                ${entry.title}${entry.width
+                                  ? ` · ${entry.width}×${entry.height}`
+                                  : ''}
+                              </option>
+                            `
+                          )}
+                        </optgroup>
                       `
                     )}
                   </select>

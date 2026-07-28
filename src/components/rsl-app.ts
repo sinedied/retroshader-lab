@@ -7,7 +7,13 @@ import './rsl-viewport.js';
 import './rsl-dock.js';
 import type { RslViewport } from './rsl-viewport.js';
 import { ShaderPipeline, computePassSizes, type PassRenderInfo } from '../core/pipeline.js';
-import { ShaderLibrary, FINAL_SHADER, BUNDLED_SAMPLES } from '../core/shader-library.js';
+import {
+  ShaderLibrary,
+  FINAL_SHADER,
+  BUNDLED_SAMPLES,
+  BUNDLED_PRESETS,
+  loadPreset
+} from '../core/shader-library.js';
 import { computeDstRect } from '../core/scaling.js';
 import { exportCfg, importCfg } from '../core/cfg.js';
 import { defaultValue, isConfigurable, quantize } from '../core/pragma-params.js';
@@ -352,6 +358,14 @@ export class RslApp extends LitElement {
     this.warnings = [...imported.warnings];
   }
 
+  private async onPresetLoad(path: string): Promise<void> {
+    try {
+      this.onCfgImport(await loadPreset(path));
+    } catch (error) {
+      this.warnings = [`Could not load preset "${path}": ${(error as Error).message}`];
+    }
+  }
+
   private async onSourceFile(file: File): Promise<void> {
     try {
       this.source = await loadImageSource(file);
@@ -414,7 +428,14 @@ export class RslApp extends LitElement {
               this.rebuildSource();
             }}
             @source-sample=${(e: CustomEvent<string>) => {
-              store.update({ sampleFile: e.detail || undefined, uploadedName: undefined });
+              const sample = BUNDLED_SAMPLES.find((entry) => entry.file === e.detail);
+              store.update({
+                sampleFile: e.detail || undefined,
+                uploadedName: undefined,
+                // keep the system selector in sync so switching back to a generated
+                // pattern stays on the same platform
+                ...(sample?.system ? { sourceSystem: sample.system } : {})
+              });
               this.rebuildSource();
             }}
             @source-file=${(e: CustomEvent<File>) => this.onSourceFile(e.detail)}
@@ -498,10 +519,12 @@ export class RslApp extends LitElement {
           class="boot"
           style="animation-delay:180ms"
           .cfgText=${this.cfgText}
+          .presets=${BUNDLED_PRESETS}
           .passes=${this.passInfos}
           .issues=${this.issues}
           .warnings=${this.warnings}
           @cfg-import=${(e: CustomEvent<string>) => this.onCfgImport(e.detail)}
+          @preset-load=${(e: CustomEvent<string>) => this.onPresetLoad(e.detail)}
         ></rsl-dock>
       </main>
     `;
