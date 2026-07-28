@@ -469,6 +469,8 @@ export class RslApp extends LitElement {
             .scaling=${state.pipeline.scaling}
             .scaleFilter=${state.pipeline.scaleFilter}
             .coreAspect=${state.pipeline.coreAspect}
+            .collapsed=${state.collapsed}
+            @toggle-panel=${(e: CustomEvent<string>) => store.toggleCollapsed(e.detail)}
             @source-system=${(e: CustomEvent<string>) => {
               store.update({ sourceSystem: e.detail, sampleFile: undefined, uploadedName: undefined });
               this.rebuildSource();
@@ -511,6 +513,8 @@ export class RslApp extends LitElement {
             .sizes=${this.passSizes}
             .shaderNames=${this.shaderNames}
             .paramsByShader=${this.paramsByShader}
+            .collapsed=${state.collapsed}
+            @toggle-panel=${(e: CustomEvent<string>) => store.toggleCollapsed(e.detail)}
             @pass-add=${() => {
               const passes = [...store.value.pipeline.passes, defaultPass()];
               store.updatePipeline({ passes: passes.slice(0, 3) });

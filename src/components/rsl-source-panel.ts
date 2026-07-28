@@ -96,6 +96,7 @@ export class RslSourcePanel extends LitElement {
   @property({ type: String }) scaling: ScalingMode = 'Aspect';
   @property({ type: String }) scaleFilter: FilterName = 'NEAREST';
   @property({ type: Number }) coreAspect = 4 / 3;
+  @property({ attribute: false }) collapsed: Record<string, boolean> = {};
 
   @state() private dragOver = false;
 
@@ -113,6 +114,22 @@ export class RslSourcePanel extends LitElement {
 
   private emit<T>(type: string, detail: T): void {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+  }
+
+  /** Fold toggle shown in a module header. */
+  private foldButton(id: string) {
+    const open = !this.collapsed[id];
+    return html`
+      <button
+        class="fold"
+        aria-expanded=${open}
+        aria-label=${open ? 'Collapse panel' : 'Expand panel'}
+        title=${open ? 'Collapse' : 'Expand'}
+        @click=${() => this.emit('toggle-panel', id)}
+      >
+        ▼
+      </button>
+    `;
   }
 
   private onDrop(event: DragEvent): void {
@@ -159,6 +176,7 @@ export class RslSourcePanel extends LitElement {
     return html`
       <section class="module">
         <div class="module-head">
+          ${this.foldButton('source')}
           <span class="idx">01</span>
           <h2>Source</h2>
           <span class="spacer"></span>
@@ -166,7 +184,7 @@ export class RslSourcePanel extends LitElement {
             <b>${this.source?.width ?? 0}×${this.source?.height ?? 0}</b>
           </span>
         </div>
-        <div class="module-body">
+        <div class="module-body" ?hidden=${this.collapsed['source']}>
           <div class="preview">
             <div class="thumb">${this.renderThumb()}</div>
             <div class="meta">
@@ -255,12 +273,13 @@ export class RslSourcePanel extends LitElement {
 
       <section class="module">
         <div class="module-head">
+          ${this.foldButton('output')}
           <span class="idx">02</span>
           <h2>Output</h2>
           <span class="spacer"></span>
           <span class="chip"><b>${this.outputWidth}×${this.outputHeight}</b></span>
         </div>
-        <div class="module-body">
+        <div class="module-body" ?hidden=${this.collapsed['output']}>
           <div>
             <label for="res">Screen resolution</label>
             <select

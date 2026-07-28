@@ -130,11 +130,28 @@ export class RslPipelinePanel extends LitElement {
   @property({ attribute: false }) sizes: PassSizes[] = [];
   @property({ attribute: false }) shaderNames: string[] = [];
   @property({ attribute: false }) paramsByShader: Map<string, ShaderParam[]> = new Map();
+  @property({ attribute: false }) collapsed: Record<string, boolean> = {};
 
   @state() private showAdvanced = false;
 
   private emit<T>(type: string, detail: T): void {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+  }
+
+  /** Fold toggle shown in a module or pass header. */
+  private foldButton(id: string) {
+    const open = !this.collapsed[id];
+    return html`
+      <button
+        class="fold"
+        aria-expanded=${open}
+        aria-label=${open ? 'Collapse panel' : 'Expand panel'}
+        title=${open ? 'Collapse' : 'Expand'}
+        @click=${() => this.emit('toggle-panel', id)}
+      >
+        ▼
+      </button>
+    `;
   }
 
   private renderParam(passIndex: number, pass: PassConfig, param: ShaderParam) {
@@ -187,6 +204,7 @@ export class RslPipelinePanel extends LitElement {
     return html`
       <article class="pass">
         <div class="pass-head">
+          ${this.foldButton(`pass-${index}`)}
           <span class="pass-num">${index + 1}</span>
           <select
             name="shader"
@@ -229,7 +247,7 @@ export class RslPipelinePanel extends LitElement {
           </button>
         </div>
 
-        <div class="pass-body">
+        <div class="pass-body" ?hidden=${this.collapsed[`pass-${index}`]}>
           <div class="grid2">
             <div>
               <label for="filter-${index}">Filter</label>
@@ -335,6 +353,7 @@ export class RslPipelinePanel extends LitElement {
     return html`
       <section class="module">
         <div class="module-head">
+          ${this.foldButton('pipeline')}
           <span class="idx">03</span>
           <h2>Pipeline</h2>
           <span class="spacer"></span>
@@ -342,7 +361,7 @@ export class RslPipelinePanel extends LitElement {
             minarch_nrofshaders <b>${this.passes.length === 0 ? 'off' : this.passes.length}</b>
           </span>
         </div>
-        <div class="module-body">
+        <div class="module-body" ?hidden=${this.collapsed['pipeline']}>
           ${this.passes.length === 0
             ? html`<p class="empty">No shader pass — the source is scaled straight to the screen.</p>`
             : this.passes.map((pass, index) => this.renderPass(pass, index))}

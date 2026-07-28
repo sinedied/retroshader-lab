@@ -53,6 +53,28 @@ export const panelStyles = css`
     flex: 1;
   }
 
+  .fold {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--ink-dim);
+    padding: 2px 4px;
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: none;
+    transition: transform 0.18s ease, color 0.15s;
+  }
+
+  .fold:hover {
+    color: var(--phosphor);
+    box-shadow: none;
+  }
+
+  .fold[aria-expanded='false'] {
+    transform: rotate(-90deg);
+  }
+
   .module-body {
     padding: 10px;
     display: flex;
