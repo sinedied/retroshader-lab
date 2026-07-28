@@ -34,8 +34,11 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps, saved with the preset
 - **NextUI screen scaling** — `Native`, `Aspect`, `Aspect (screen)`, `Fullscreen`, `Cropped` — with real letterboxing
 - **Generated test patterns** at console resolutions (GB, GBC, GBA, NES, SNES, Mega Drive, PlayStation, PSP) or your own screenshots
-- **Pixel-honest viewport**: fit / 1:1 / integer zoom up to 8× with drag-to-pan, and **PNG export at 1:1**
-- **Split compare** against the unshaded source with a draggable wipe
+- **Pixel-honest viewport**: 1:1 by default, `Fit · 1:1 · 2:1 · 4:1` shortcuts and zoom up to 16× with
+  drag-to-pan, and **PNG export at 1:1**
+- **Compare up to 3 pipelines** — the one you are editing against the raw source or any stock preset,
+  in two layouts: a movable **overlay** divider, or **side-by-side** columns that pan together
+- **Foldable panels** and collapsible side rails (`[` and `]`)
 - **Pass inspector** showing every intermediate render with its computed `InputSize` / `TextureSize` / `OutputSize`
 - **Live `.cfg`** you can edit, download, or load back — unknown keys (core options like `gambatte_*`) are preserved
 - **GLSL error panel** with the fully preprocessed source, line-numbered
@@ -74,6 +77,19 @@ npm run dev   # the manifest picks up public/samples automatically
 ```
 
 They then appear in the **Game screenshots** dropdown.
+
+### Comparing pipelines
+
+Hit **Compare** in the viewport toolbar to put 2 or 3 panes on screen. Pane A is always the pipeline
+you are editing; the others show the raw source (the default) or any stock preset.
+
+| Layout | Behaviour |
+| --- | --- |
+| **Overlay** | Panes are clipped by a movable divider (two dividers for 3 panes) so the result reads as a single image |
+| **Side by side** | Fixed equal columns, each showing the *same* region of the scene; dragging pans them all together |
+
+While comparing, **Export PNG 1:1** writes the comparison exactly as laid out, at the output
+resolution; **Pane A** exports just the edited pipeline.
 
 ### Starting from a NextUI preset
 
