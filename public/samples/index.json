@@ -1,0 +1,146 @@
+[
+  {
+    "file": "gb-super-mario-land.png",
+    "system": "gb",
+    "platform": "Game Boy",
+    "title": "Super Mario Land",
+    "width": 160,
+    "height": 144,
+    "source": "libretro-thumbnails/Nintendo_-_Game_Boy/Named_Snaps/Super Mario Land (World).png"
+  },
+  {
+    "file": "gb-tetris.png",
+    "system": "gb",
+    "platform": "Game Boy",
+    "title": "Tetris",
+    "width": 160,
+    "height": 144,
+    "source": "libretro-thumbnails/Nintendo_-_Game_Boy/Named_Snaps/Tetris (World) (Rev 1).png"
+  },
+  {
+    "file": "gbc-zelda-link-s-awakening-dx.png",
+    "system": "gbc",
+    "platform": "Game Boy Color",
+    "title": "Zelda: Link's Awakening DX",
+    "width": 160,
+    "height": 144,
+    "source": "libretro-thumbnails/Nintendo_-_Game_Boy_Color/Named_Snaps/Legend of Zelda, The - Link's Awakening DX (USA, Europe) (SGB Enhanced) (GB Compatible).png"
+  },
+  {
+    "file": "gbc-pokemon-crystal.png",
+    "system": "gbc",
+    "platform": "Game Boy Color",
+    "title": "Pokémon Crystal",
+    "width": 160,
+    "height": 144,
+    "source": "libretro-thumbnails/Nintendo_-_Game_Boy_Color/Named_Snaps/Pokemon - Crystal Version (USA).png"
+  },
+  {
+    "file": "gba-metroid-zero-mission.png",
+    "system": "gba",
+    "platform": "Game Boy Advance",
+    "title": "Metroid: Zero Mission",
+    "width": 240,
+    "height": 160,
+    "source": "libretro-thumbnails/Nintendo_-_Game_Boy_Advance/Named_Snaps/Metroid - Zero Mission (USA).png"
+  },
+  {
+    "file": "gba-zelda-the-minish-cap.png",
+    "system": "gba",
+    "platform": "Game Boy Advance",
+    "title": "Zelda: The Minish Cap",
+    "width": 240,
+    "height": 160,
+    "source": "libretro-thumbnails/Nintendo_-_Game_Boy_Advance/Named_Snaps/Legend of Zelda, The - The Minish Cap (USA).png"
+  },
+  {
+    "file": "nes-mega-man-2.png",
+    "system": "nes",
+    "platform": "NES",
+    "title": "Mega Man 2",
+    "width": 256,
+    "height": 240,
+    "source": "libretro-thumbnails/Nintendo_-_Nintendo_Entertainment_System/Named_Snaps/Mega Man 2 (Europe).png"
+  },
+  {
+    "file": "nes-metroid.png",
+    "system": "nes",
+    "platform": "NES",
+    "title": "Metroid",
+    "width": 256,
+    "height": 240,
+    "source": "libretro-thumbnails/Nintendo_-_Nintendo_Entertainment_System/Named_Snaps/Metroid (Europe).png"
+  },
+  {
+    "file": "snes-super-mario-world.png",
+    "system": "snes",
+    "platform": "SNES",
+    "title": "Super Mario World",
+    "width": 256,
+    "height": 224,
+    "source": "libretro-thumbnails/Nintendo_-_Super_Nintendo_Entertainment_System/Named_Snaps/Super Mario World (USA).png"
+  },
+  {
+    "file": "snes-chrono-trigger.png",
+    "system": "snes",
+    "platform": "SNES",
+    "title": "Chrono Trigger",
+    "width": 256,
+    "height": 224,
+    "source": "libretro-thumbnails/Nintendo_-_Super_Nintendo_Entertainment_System/Named_Snaps/Chrono Trigger (USA).png"
+  },
+  {
+    "file": "md-sonic-the-hedgehog.png",
+    "system": "md",
+    "platform": "Mega Drive",
+    "title": "Sonic The Hedgehog",
+    "width": 320,
+    "height": 224,
+    "source": "libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/Named_Snaps/Sonic The Hedgehog (USA, Europe).png"
+  },
+  {
+    "file": "md-streets-of-rage-2.png",
+    "system": "md",
+    "platform": "Mega Drive",
+    "title": "Streets of Rage 2",
+    "width": 320,
+    "height": 224,
+    "source": "libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/Named_Snaps/Streets of Rage 2 (USA).png"
+  },
+  {
+    "file": "ps1-metal-gear-solid.png",
+    "system": "ps1",
+    "platform": "PlayStation",
+    "title": "Metal Gear Solid",
+    "width": 320,
+    "height": 240,
+    "source": "libretro-thumbnails/Sony_-_PlayStation/Named_Snaps/Metal Gear Solid (USA) (Disc 1).png"
+  },
+  {
+    "file": "ps1-resident-evil-2.png",
+    "system": "ps1",
+    "platform": "PlayStation",
+    "title": "Resident Evil 2",
+    "width": 320,
+    "height": 240,
+    "source": "libretro-thumbnails/Sony_-_PlayStation/Named_Snaps/Resident Evil 2 (USA) (Disc 1).png"
+  },
+  {
+    "file": "psp-god-of-war-chains-of-olympus.png",
+    "system": "psp",
+    "platform": "PSP",
+    "title": "God of War: Chains of Olympus",
+    "width": 480,
+    "height": 272,
+    "source": "libretro-thumbnails/Sony_-_PlayStation_Portable/Named_Snaps/God of War - Chains of Olympus (USA).png"
+  },
+  {
+    "file": "psp-patapon.png",
+    "system": "psp",
+    "platform": "PSP",
+    "title": "Patapon",
+    "width": 480,
+    "height": 272,
+    "source": "libretro-thumbnails/Sony_-_PlayStation_Portable/Named_Snaps/Patapon (USA).png"
+  }
+]

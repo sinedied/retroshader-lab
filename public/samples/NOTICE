@@ -1,0 +1,33 @@
+RetroShader Lab — notice for public/samples
+===========================================
+
+The screenshots in this directory are in-game snapshots taken from the
+libretro-thumbnails project:
+
+    https://github.com/libretro-thumbnails/libretro-thumbnails
+
+They were selected because they are captured with shaders and filters disabled
+and are stored at the native output resolution of each system, which makes them
+accurate inputs for testing shader pipelines:
+
+    Game Boy / Game Boy Color   160x144
+    Game Boy Advance            240x160
+    NES                         256x240
+    SNES                        256x224
+    Mega Drive / Genesis        320x224
+    PlayStation                 320x240
+    PSP                         480x272
+
+The exact upstream path of every file is recorded in index.json.
+No image has been resized, cropped or re-encoded.
+
+Copyright
+---------
+These images depict copyrighted works. Each screenshot remains the property of
+the respective game's copyright holders and publishers; they are included here
+solely as reference material for evaluating video shaders, and are not covered
+by the GPL that applies to the rest of this project.
+
+If you are a rights holder and want an image removed, delete the file from this
+directory and its entry from index.json — the lab falls back to its built-in
+generated test patterns.
