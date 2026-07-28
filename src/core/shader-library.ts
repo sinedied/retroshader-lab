@@ -9,8 +9,28 @@ import type { ShaderParam } from './types.js';
 const CUSTOM_STORAGE_KEY = 'retroshader-lab:custom-shaders';
 export const FINAL_SHADER = 'default.glsl';
 
+/** A screenshot bundled in `public/samples`, described by `public/samples/index.json`. */
+export interface SampleEntry {
+  file: string;
+  system?: string;
+  platform?: string;
+  title: string;
+  width?: number;
+  height?: number;
+}
+
 /** Screenshots bundled in `public/samples`, picked up by `npm run shaders`. */
-export const BUNDLED_SAMPLES: string[] = manifest.samples ?? [];
+export const BUNDLED_SAMPLES: SampleEntry[] = manifest.samples ?? [];
+
+/** Stock NextUI shader presets copied into `public/shaders/presets`. */
+export const BUNDLED_PRESETS: string[] = manifest.presets ?? [];
+
+/** Fetches one of the stock NextUI presets. */
+export async function loadPreset(path: string): Promise<string> {
+  const response = await fetch(`${import.meta.env.BASE_URL}shaders/presets/${path}`);
+  if (!response.ok) throw new Error(`Failed to load preset ${path}: ${response.status}`);
+  return response.text();
+}
 
 export interface ShaderEntry {
   name: string;
