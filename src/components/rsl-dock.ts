@@ -350,6 +350,9 @@ export class RslDock extends LitElement {
         </button>
       </div>
       <textarea
+        id="cfg-text"
+        name="cfg"
+        aria-label="NextUI shader configuration"
         spellcheck="false"
         .value=${text}
         @input=${(e: Event) => (this.draft = (e.target as HTMLTextAreaElement).value)}

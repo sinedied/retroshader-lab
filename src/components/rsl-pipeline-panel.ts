@@ -153,6 +153,9 @@ export class RslPipelinePanel extends LitElement {
         </div>
         <input
           type="range"
+          id="param-${passIndex}-${param.name}"
+          name=${param.name}
+          aria-label=${param.label || param.name}
           min="0"
           max=${Math.max(0, count - 1)}
           step="1"
@@ -186,6 +189,8 @@ export class RslPipelinePanel extends LitElement {
         <div class="pass-head">
           <span class="pass-num">${index + 1}</span>
           <select
+            name="shader"
+            aria-label="Shader"
             .value=${pass.shader}
             @change=${(e: Event) =>
               this.emit('pass-change', {
@@ -227,8 +232,10 @@ export class RslPipelinePanel extends LitElement {
         <div class="pass-body">
           <div class="grid2">
             <div>
-              <label>Filter</label>
+              <label for="filter-${index}">Filter</label>
               <select
+                id="filter-${index}"
+                name="filter"
                 @change=${(e: Event) =>
                   this.emit('pass-change', {
                     index,
@@ -243,8 +250,10 @@ export class RslPipelinePanel extends LitElement {
               </select>
             </div>
             <div>
-              <label>Upscale</label>
+              <label for="upscale-${index}">Upscale</label>
               <select
+                id="upscale-${index}"
+                name="upscale"
                 @change=${(e: Event) =>
                   this.emit('pass-change', {
                     index,
@@ -264,8 +273,10 @@ export class RslPipelinePanel extends LitElement {
 
           <div class="grid2">
             <div>
-              <label>Source type</label>
+              <label for="srctype-${index}">Source type</label>
               <select
+                id="srctype-${index}"
+                name="srctype"
                 @change=${(e: Event) =>
                   this.emit('pass-change', {
                     index,
@@ -280,8 +291,10 @@ export class RslPipelinePanel extends LitElement {
               </select>
             </div>
             <div>
-              <label>Texture type</label>
+              <label for="scaletype-${index}">Texture type</label>
               <select
+                id="scaletype-${index}"
+                name="scaletype"
                 @change=${(e: Event) =>
                   this.emit('pass-change', {
                     index,
