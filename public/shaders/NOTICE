@@ -1,0 +1,45 @@
+RetroShader Lab — third-party notice for public/shaders
+=======================================================
+
+Everything in this directory comes from NextUI and is redistributed under its
+license. See LICENSE in this directory for the full text.
+
+NextUI
+------
+    https://github.com/LoveRetro/NextUI
+    Licensed under the GNU General Public License v3.0.
+
+    glsl/      copied verbatim from NextUI  skeleton/BASE/Shaders/glsl/
+    default.glsl  copied verbatim from NextUI  skeleton/SYSTEM/desktop/shaders/default.glsl
+               (the final scale pass of the minarch pipeline)
+    presets/   copied verbatim from NextUI  skeleton/BASE/Shaders/
+               (the stock shader configs, including the per-system sets/)
+
+Shader sources
+--------------
+Most of the shaders originate from the libretro GLSL shader collection
+(https://github.com/libretro/glsl-shaders) and each file keeps the license
+stated in its own header. As shipped here, that is:
+
+    GNU General Public License (v2 or later, per the file header):
+        barrel-distortion.glsl, bicubic.glsl, fast-sharpen.glsl,
+        pixel_art_AA.glsl, scale3x.glsl
+
+    Public domain:
+        crt-perfect.glsl, crt-perfect-v2.glsl, crt-perfect-v3.glsl,
+        image-adjustment.glsl, lcd1x.glsl, res-independent-scanlines.glsl,
+        sharp-bilinear.glsl, sharp-shimmerless.glsl,
+        sharp-shimmerless-grid.glsl, sharp-shimmerless-subpixel-vrgb.glsl
+
+    No explicit header — see the upstream libretro repository and the
+    copyright lines inside each file:
+        aa-shader-4.0.glsl, dmg_dot_matrix.glsl, edge1pixel.glsl,
+        lcd3x.glsl, pixellate.glsl, retro-v2.glsl, scanline.glsl,
+        stock.glsl, waterpaint.glsl
+
+Individual copyright holders named in the shader headers include, among
+others, Team XBMC, Andrea Mazzoleni, guest(r), Fes, Gigaherz, jdgleaver and
+the libretro contributors.
+
+No shader source has been modified: the files are byte-identical copies, so
+what the lab compiles is exactly what NextUI compiles on the device.
