@@ -7,6 +7,14 @@ const STORAGE_KEY = 'retroshader-lab:state';
 
 export type ViewMode = 'fit' | 'zoom';
 
+/** How the comparison panes are laid out over the stage. */
+export type CompareMode = 'off' | 'overlay' | 'side-by-side';
+
+/** A comparison pane: a bundled preset path, or `undefined` for the raw source. */
+export interface ComparePane {
+  preset: string | undefined;
+}
+
 export interface AppState {
   /** Source selection: a generated pattern, a bundled sample or an uploaded file. */
   sourceSystem: string;
@@ -23,8 +31,21 @@ export interface AppState {
 
   viewMode: ViewMode;
   zoom: number;
-  showSplit: boolean;
-  splitPosition: number;
+  /** Scene offset in CSS pixels, shared by every pane. */
+  pan: { x: number; y: number };
+
+  compareMode: CompareMode;
+  /** Total number of panes on screen, including the edited pipeline. */
+  paneCount: 2 | 3;
+  /** Configuration of the comparison panes B and C. */
+  panes: [ComparePane, ComparePane];
+  /** Overlay divider positions, normalized: one for 2 panes, two for 3. */
+  dividers: number[];
+
+  /** Collapsed state of the foldable panels, keyed by panel id. */
+  collapsed: Record<string, boolean>;
+  showRail: boolean;
+  showDock: boolean;
   showInspector: boolean;
 
   /** Entries preserved from an imported cfg. */
@@ -57,13 +78,26 @@ export function defaultState(): AppState {
       passes: [defaultPass()],
       frameCount: 0
     },
-    viewMode: 'fit',
+    // 1:1 by default: the lab is for looking at pixels
+    viewMode: 'zoom',
     zoom: 1,
-    showSplit: false,
-    splitPosition: 0.5,
+    pan: { x: 0, y: 0 },
+    compareMode: 'off',
+    paneCount: 2,
+    panes: [{ preset: undefined }, { preset: undefined }],
+    dividers: [0.5],
+    collapsed: {},
+    showRail: true,
+    showDock: true,
     showInspector: false,
     cfgExtras: []
   };
+}
+
+/** Fields written by versions of the lab that only had a raw split view. */
+interface LegacyState {
+  showSplit?: boolean;
+  splitPosition?: number;
 }
 
 type Listener = (state: AppState) => void;
@@ -113,6 +147,32 @@ export class Store {
     this.updatePipeline({ scaleFilter });
   }
 
+  /** Number of dividers a layout needs: one less than the number of panes. */
+  static dividersFor(paneCount: number): number[] {
+    return Array.from({ length: paneCount - 1 }, (_, i) => (i + 1) / paneCount);
+  }
+
+  setCompare(patch: { compareMode?: CompareMode; paneCount?: 2 | 3 }): void {
+    const paneCount = patch.paneCount ?? this.state.paneCount;
+    const dividers =
+      patch.paneCount && patch.paneCount !== this.state.paneCount
+        ? Store.dividersFor(paneCount)
+        : this.state.dividers;
+    this.update({ ...patch, paneCount, dividers });
+  }
+
+  setPane(index: 0 | 1, preset: string | undefined): void {
+    const panes: [ComparePane, ComparePane] = [...this.state.panes] as [ComparePane, ComparePane];
+    panes[index] = { preset };
+    this.update({ panes });
+  }
+
+  toggleCollapsed(id: string): void {
+    this.update({
+      collapsed: { ...this.state.collapsed, [id]: !this.state.collapsed[id] }
+    });
+  }
+
   reset(): void {
     this.state = defaultState();
     this.emit();
@@ -140,15 +200,28 @@ export class Store {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as Partial<AppState>;
+      const parsed = JSON.parse(raw) as Partial<AppState> & LegacyState;
       const base = defaultState();
       this.state = {
         ...base,
         ...parsed,
         pipeline: { ...base.pipeline, ...parsed.pipeline },
+        pan: { ...base.pan, ...parsed.pan },
+        panes: (parsed.panes ?? base.panes).slice(0, 2) as [ComparePane, ComparePane],
+        collapsed: { ...parsed.collapsed },
         // an uploaded image cannot be restored, fall back to a generated pattern
         uploadedName: undefined
       };
+
+      // Sessions saved before multi-pane comparison used a single raw split.
+      if (parsed.compareMode === undefined && parsed.showSplit) {
+        this.state.compareMode = 'overlay';
+        this.state.dividers = [parsed.splitPosition ?? 0.5];
+      }
+      if (this.state.paneCount !== 2 && this.state.paneCount !== 3) this.state.paneCount = 2;
+      if (this.state.dividers.length !== this.state.paneCount - 1) {
+        this.state.dividers = Store.dividersFor(this.state.paneCount);
+      }
       this.state.pipeline.passes = (this.state.pipeline.passes ?? []).slice(0, 3);
     } catch {
       this.state = defaultState();

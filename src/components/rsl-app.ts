@@ -6,7 +6,13 @@ import './rsl-pipeline-panel.js';
 import './rsl-viewport.js';
 import './rsl-dock.js';
 import type { RslViewport } from './rsl-viewport.js';
-import { ShaderPipeline, computePassSizes, type PassRenderInfo } from '../core/pipeline.js';
+import {
+  ShaderPipeline,
+  computePassSizes,
+  type PassRenderInfo,
+  type RenderResult
+} from '../core/pipeline.js';
+import { panePipelineConfig } from '../core/preset-config.js';
 import {
   ShaderLibrary,
   FINAL_SHADER,
@@ -28,6 +34,7 @@ import type {
   CompileIssue,
   PassConfig,
   PassSizes,
+  PipelineConfig,
   ShaderParam,
   SourceImage
 } from '../core/types.js';
@@ -131,6 +138,10 @@ export class RslApp extends LitElement {
         min-height: 0;
       }
 
+      [hidden] {
+        display: none !important;
+      }
+
       .rail {
         min-height: 0;
         overflow-y: auto;
@@ -192,10 +203,16 @@ export class RslApp extends LitElement {
   @state() private notices: string[] = [];
 
   private readonly library = new ShaderLibrary();
-  private main: ShaderPipeline | undefined;
-  private reference: ShaderPipeline | undefined;
+  /** One pipeline per comparison pane; index 0 is the pipeline being edited. */
+  private pipelines: ShaderPipeline[] = [];
+  /** Resolved config of each comparison pane, kept in sync with the pane selection. */
+  private paneConfigs: (PipelineConfig | undefined)[] = [undefined, undefined];
   private renderScheduled = false;
   private unsubscribe: (() => void) | undefined;
+
+  private get main(): ShaderPipeline | undefined {
+    return this.pipelines[0];
+  }
 
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
@@ -210,6 +227,7 @@ export class RslApp extends LitElement {
     // Passes restored from localStorage (or the defaults) may predate the shader
     // metadata, so fill in every declared parameter with its NextUI default.
     this.syncPassParams();
+    void this.refreshPanes();
     this.rebuildSource();
   }
 
@@ -218,11 +236,28 @@ export class RslApp extends LitElement {
     super.disconnectedCallback();
   }
 
-  private onViewportReady(
-    event: CustomEvent<{ main: HTMLCanvasElement; reference: HTMLCanvasElement }>
-  ): void {
-    this.main = new ShaderPipeline(event.detail.main);
-    this.reference = new ShaderPipeline(event.detail.reference);
+  private onViewportReady(event: CustomEvent<HTMLCanvasElement[]>): void {
+    this.pipelines = event.detail.map((canvas) => new ShaderPipeline(canvas));
+    this.scheduleRender();
+  }
+
+  /**
+   * Resolves the preset panes into pipeline configs. Raw panes stay `undefined` so they
+   * always follow the pipeline currently being edited instead of a stale snapshot.
+   */
+  private async refreshPanes(): Promise<void> {
+    const state = this.appState;
+    const paramsOf = (shader: string) => this.library.paramsOf(shader);
+    try {
+      this.paneConfigs = await Promise.all(
+        state.panes.map((pane) =>
+          pane.preset ? panePipelineConfig(pane.preset, state.pipeline, paramsOf) : undefined
+        )
+      );
+    } catch (error) {
+      this.notices = [`Could not load a comparison preset: ${(error as Error).message}`];
+      return;
+    }
     this.scheduleRender();
   }
 
@@ -268,39 +303,53 @@ export class RslApp extends LitElement {
 
   /** Compiles anything the pipeline needs, then renders both canvases. */
   private renderPipeline(): void {
-    if (!this.main || !this.reference || !this.source || !this.ready) return;
+    if (!this.main || !this.source || !this.ready) return;
     const state = this.appState;
-    const config = state.pipeline;
+    const paneCount = state.compareMode === 'off' ? 1 : state.paneCount;
 
-    const needed = new Set<string>([FINAL_SHADER, ...config.passes.map((pass) => pass.shader)]);
-    for (const name of needed) {
-      const entry = this.library.get(name);
-      if (!entry) continue;
-      this.main.compile(name, entry.source);
-      this.reference.compile(name, entry.source);
+    // Pane 0 is the edited pipeline, the others come from the pane selection. Preset
+    // panes inherit the geometry so only the shaders differ between panes.
+    const configs: PipelineConfig[] = [state.pipeline];
+    for (let i = 1; i < paneCount; i++) {
+      const resolved = this.paneConfigs[i - 1];
+      configs.push(
+        resolved
+          ? {
+              ...resolved,
+              scaling: state.pipeline.scaling,
+              coreAspect: state.pipeline.coreAspect,
+              frameCount: state.pipeline.frameCount
+            }
+          : { ...state.pipeline, passes: [] }
+      );
     }
 
     const started = performance.now();
-    const result = this.main.render({
-      source: this.source,
-      config,
-      screenW: state.outputWidth,
-      screenH: state.outputHeight,
-      finalShaderName: FINAL_SHADER,
-      inspect: true
-    });
-    this.reference.render({
-      source: this.source,
-      config: { ...config, passes: [] },
-      screenW: state.outputWidth,
-      screenH: state.outputHeight,
-      finalShaderName: FINAL_SHADER
-    });
-    this.renderMs = performance.now() - started;
+    let mainResult: RenderResult | undefined;
 
-    this.passInfos = result.passes;
-    this.issues = result.issues;
-    this.warnings = result.warnings;
+    for (const [index, config] of configs.entries()) {
+      const pipeline = this.pipelines[index];
+      if (!pipeline) continue;
+      for (const name of new Set([FINAL_SHADER, ...config.passes.map((pass) => pass.shader)])) {
+        const entry = this.library.get(name);
+        if (entry) pipeline.compile(name, entry.source);
+      }
+      const result = pipeline.render({
+        source: this.source,
+        config,
+        screenW: state.outputWidth,
+        screenH: state.outputHeight,
+        finalShaderName: FINAL_SHADER,
+        inspect: index === 0
+      });
+      if (index === 0) mainResult = result;
+    }
+
+    this.renderMs = performance.now() - started;
+    if (!mainResult) return;
+    this.passInfos = mainResult.passes;
+    this.issues = mainResult.issues;
+    this.warnings = mainResult.warnings;
   }
 
   /** Ensures a pass carries the default values of its shader's parameters. */
@@ -382,6 +431,7 @@ export class RslApp extends LitElement {
   private resetAll(): void {
     store.reset();
     this.syncPassParams();
+    void this.refreshPanes();
     this.rebuildSource();
   }
 
@@ -498,8 +548,12 @@ export class RslApp extends LitElement {
           .height=${state.outputHeight}
           .viewMode=${state.viewMode}
           .zoom=${state.zoom}
-          .showSplit=${state.showSplit}
-          .splitPosition=${state.splitPosition}
+          .pan=${state.pan}
+          .compareMode=${state.compareMode}
+          .paneCount=${state.paneCount}
+          .panes=${state.panes}
+          .dividers=${state.dividers}
+          .presets=${BUNDLED_PRESETS}
           .dstRect=${this.passSizes.length >= 0 && this.source
             ? computeDstRect(
                 state.pipeline.scaling,
@@ -513,10 +567,19 @@ export class RslApp extends LitElement {
           .renderMs=${this.renderMs}
           @viewport-ready=${this.onViewportReady}
           @view-change=${(e: CustomEvent<Partial<AppState>>) => store.update(e.detail)}
-          @export-png=${() =>
-            this.viewport.exportPng(
-              `retroshader-${state.sourceSystem}-${state.outputWidth}x${state.outputHeight}.png`
-            )}
+          @compare-change=${(e: CustomEvent<{ compareMode?: AppState['compareMode']; paneCount?: 2 | 3 }>) => {
+            store.setCompare(e.detail);
+            void this.refreshPanes();
+          }}
+          @pane-change=${(e: CustomEvent<{ index: 0 | 1; preset: string | undefined }>) => {
+            store.setPane(e.detail.index, e.detail.preset);
+            void this.refreshPanes();
+          }}
+          @export-png=${(e: CustomEvent<{ composite: boolean }>) => {
+            const name = `retroshader-${state.sourceSystem}-${state.outputWidth}x${state.outputHeight}`;
+            if (e.detail?.composite) this.viewport.exportComposite(`${name}-compare.png`);
+            else this.viewport.exportPng(`${name}.png`);
+          }}
         ></rsl-viewport>
 
         <rsl-dock
