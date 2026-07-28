@@ -27,7 +27,8 @@ stated in its own header. As shipped here, that is:
 
     Public domain:
         crt-perfect.glsl, crt-perfect-v2.glsl, crt-perfect-v3.glsl,
-        image-adjustment.glsl, lcd1x.glsl, res-independent-scanlines.glsl,
+        crt-perfect-v4.glsl, image-adjustment.glsl, lcd1x.glsl,
+        res-independent-scanlines.glsl,
         sharp-bilinear.glsl, sharp-shimmerless.glsl,
         sharp-shimmerless-grid.glsl, sharp-shimmerless-subpixel-vrgb.glsl
 

@@ -84,6 +84,10 @@
        source line and silent at or below 2.0; the mask is full above 3 output
        pixels per triad and silent at or below 2.
 
+       That makes v3 inert at low target resolutions - at 640x480 a 240p source
+       gives exactly 2 output pixels per line and nothing renders at all. Use
+       crt-perfect-v4.glsl there; it is identical to v3 wherever v3 works.
+
     OTHER LIMITS
 
       - Requires fragment highp (all GLES 3.x targets provide it). The scanline

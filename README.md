@@ -28,8 +28,8 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 ## Features
 
 - **1–3 shader passes** with the exact NextUI options: `filter`, `srctype`, `scaletype`, `upscale` (`1×`–`8×` or `screen`)
-- **24 stock shaders** copied from NextUI's `Shaders/glsl`, plus drag & drop of your own `.glsl`
-- **24 stock NextUI presets** (`real-gameboy`, `crt-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
+- **25 stock shaders** copied from NextUI's `Shaders/glsl`, plus drag & drop of your own `.glsl`
+- **25 stock NextUI presets** (`real-gameboy`, `crt-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
 - **16 real game screenshots** at native resolution — 2 per platform, unfiltered, from libretro-thumbnails
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps, saved with the preset
 - **NextUI screen scaling** — `Native`, `Aspect`, `Aspect (screen)`, `Fullscreen`, `Cropped` — with real letterboxing
@@ -93,7 +93,7 @@ resolution; **Pane A** exports just the edited pipeline.
 
 ### Starting from a NextUI preset
 
-The 24 stock configs from `NextUI/skeleton/BASE/Shaders` are bundled in
+The 25 stock configs from `NextUI/skeleton/BASE/Shaders` are bundled in
 `public/shaders/presets/`. Pick one in the **NextUI stock presets** dropdown of the cfg panel and
 the whole pipeline — passes, filters, scaling and shader parameters — is applied at once.
 
@@ -195,8 +195,8 @@ The pipeline is intentionally faithful, including quirks. Known deviations:
 ## Project structure
 
 ```
-public/shaders/glsl/      24 stock NextUI shaders
-public/shaders/presets/   24 stock NextUI shader configs (incl. the per-system sets/)
+public/shaders/glsl/      25 stock NextUI shaders
+public/shaders/presets/   25 stock NextUI shader configs (incl. the per-system sets/)
 public/shaders/           default.glsl — the final scale pass · LICENSE · NOTICE
 public/samples/           game screenshots + index.json + NOTICE
 scripts/                  asset manifest generator
