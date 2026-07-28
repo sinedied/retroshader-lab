@@ -187,6 +187,9 @@ export class RslApp extends LitElement {
   @state() private warnings: string[] = [];
   @state() private renderMs = 0;
   @state() private ready = false;
+  /** Messages from user actions (import, preset, upload); render warnings are separate
+      because every render replaces them. */
+  @state() private notices: string[] = [];
 
   private readonly library = new ShaderLibrary();
   private main: ShaderPipeline | undefined;
@@ -244,7 +247,7 @@ export class RslApp extends LitElement {
           this.scheduleRender();
         })
         .catch((error: Error) => {
-          this.warnings = [`Could not load sample "${state.sampleFile}": ${error.message}`];
+          this.notices = [`Could not load sample "${state.sampleFile}": ${error.message}`];
         });
       return;
     }
@@ -355,14 +358,14 @@ export class RslApp extends LitElement {
       ...(imported.scaling ? { scaling: imported.scaling } : {}),
       ...(imported.scaleFilter ? { scaleFilter: imported.scaleFilter } : {})
     });
-    this.warnings = [...imported.warnings];
+    this.notices = [...imported.warnings];
   }
 
   private async onPresetLoad(path: string): Promise<void> {
     try {
       this.onCfgImport(await loadPreset(path));
     } catch (error) {
-      this.warnings = [`Could not load preset "${path}": ${(error as Error).message}`];
+      this.notices = [`Could not load preset "${path}": ${(error as Error).message}`];
     }
   }
 
@@ -370,8 +373,9 @@ export class RslApp extends LitElement {
     try {
       this.source = await loadImageSource(file);
       store.update({ uploadedName: file.name, sampleFile: undefined });
+      this.notices = [];
     } catch (error) {
-      this.warnings = [`Could not load "${file.name}": ${(error as Error).message}`];
+      this.notices = [`Could not load "${file.name}": ${(error as Error).message}`];
     }
   }
 
@@ -522,7 +526,7 @@ export class RslApp extends LitElement {
           .presets=${BUNDLED_PRESETS}
           .passes=${this.passInfos}
           .issues=${this.issues}
-          .warnings=${this.warnings}
+          .warnings=${[...this.notices, ...this.warnings]}
           @cfg-import=${(e: CustomEvent<string>) => this.onCfgImport(e.detail)}
           @preset-load=${(e: CustomEvent<string>) => this.onPresetLoad(e.detail)}
         ></rsl-dock>
