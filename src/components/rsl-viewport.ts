@@ -166,15 +166,23 @@ export class RslViewport extends LitElement {
   }
 
   override firstUpdated(): void {
-    this.resizeObserver = new ResizeObserver(() => this.updateFitScale());
+    // The observer fires during layout, so defer the state write to the next frame to
+    // avoid scheduling a Lit update from inside an update cycle.
+    this.resizeObserver = new ResizeObserver(() =>
+      requestAnimationFrame(() => this.updateFitScale())
+    );
     this.resizeObserver.observe(this.stage);
     requestAnimationFrame(() => this.updateFitScale());
-    this.dispatchEvent(
-      new CustomEvent('viewport-ready', {
-        detail: this.canvases,
-        bubbles: true,
-        composed: true
-      })
+    // Hand the canvases over outside the update cycle so the app's reaction cannot
+    // schedule a Lit update from within this one.
+    queueMicrotask(() =>
+      this.dispatchEvent(
+        new CustomEvent('viewport-ready', {
+          detail: this.canvases,
+          bubbles: true,
+          composed: true
+        })
+      )
     );
   }
 
@@ -184,7 +192,11 @@ export class RslViewport extends LitElement {
   }
 
   override updated(changed: Map<string, unknown>): void {
-    if (changed.has('width') || changed.has('height')) this.updateFitScale();
+    // Deferred: recomputing the fit scale writes reactive state, which Lit rejects
+    // from inside an update cycle.
+    if (changed.has('width') || changed.has('height')) {
+      requestAnimationFrame(() => this.updateFitScale());
+    }
   }
 
   private updateFitScale(): void {
@@ -192,7 +204,8 @@ export class RslViewport extends LitElement {
     const padding = 44;
     const availableW = Math.max(64, this.stage.clientWidth - padding);
     const availableH = Math.max(64, this.stage.clientHeight - padding);
-    this.fitScale = Math.min(availableW / this.width, availableH / this.height, 1);
+    const scale = Math.min(availableW / this.width, availableH / this.height, 1);
+    if (Math.abs(scale - this.fitScale) > 0.0001) this.fitScale = scale;
   }
 
   private get scale(): number {
