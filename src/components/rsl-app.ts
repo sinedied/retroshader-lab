@@ -375,7 +375,7 @@ export class RslApp extends LitElement {
       <header class="masthead boot" style="animation-delay:0ms">
         <div class="logo">
           <span class="mark">Retro<em>Shader</em> Lab</span>
-          <span class="sub">NextUI · minarch pipeline bench</span>
+          <span class="sub">NextUI · shader pipeline bench</span>
         </div>
         <span class="spacer"></span>
         <span class="chip">${this.shaderNames.length} shaders</span>
