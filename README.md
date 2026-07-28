@@ -8,6 +8,7 @@
 ![Lit](https://img.shields.io/badge/Lit-3-324FFF?style=flat-square&logo=lit&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![WebGL2](https://img.shields.io/badge/WebGL-2-990000?style=flat-square&logo=webgl&logoColor=white)
+![License](https://img.shields.io/badge/license-GPL--3.0--or--later-3DA639?style=flat-square)
 
 [Quick start](#quick-start) · [How it works](#how-it-works) · [CFG format](#cfg-format) · [Fidelity notes](#fidelity-notes) · [Project structure](#project-structure)
 
@@ -25,7 +26,9 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 ## Features
 
 - **1–3 shader passes** with the exact NextUI options: `filter`, `srctype`, `scaletype`, `upscale` (`1×`–`8×` or `screen`)
-- **22 stock shaders** copied from NextUI's `Shaders/glsl`, plus drag & drop of your own `.glsl`
+- **24 stock shaders** copied from NextUI's `Shaders/glsl`, plus drag & drop of your own `.glsl`
+- **24 stock NextUI presets** (`real-gameboy`, `crt-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
+- **16 real game screenshots** at native resolution — 2 per platform, unfiltered, from libretro-thumbnails
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps, saved with the preset
 - **NextUI screen scaling** — `Native`, `Aspect`, `Aspect (screen)`, `Fullscreen`, `Cropped` — with real letterboxing
 - **Generated test patterns** at console resolutions (GB, GBC, GBA, NES, SNES, Mega Drive, PlayStation, PSP) or your own screenshots
@@ -57,14 +60,21 @@ Then open <http://localhost:5180>.
 
 ### Using your own screenshots
 
-Drop an image onto the source panel, or bundle screenshots permanently:
+The lab ships with 16 native-resolution game screenshots (2 per platform) in `public/samples/`.
+To add yours, drop an image onto the source panel, or bundle it permanently:
 
 ```bash
 cp my-screenshot.png public/samples/
 npm run dev   # the manifest picks up public/samples automatically
 ```
 
-They then appear in the **Bundled screenshots** dropdown.
+They then appear in the **Game screenshots** dropdown.
+
+### Starting from a NextUI preset
+
+The 24 stock configs from `NextUI/skeleton/BASE/Shaders` are bundled in
+`public/shaders/presets/`. Pick one in the **NextUI stock presets** dropdown of the cfg panel and
+the whole pipeline — passes, filters, scaling and shader parameters — is applied at once.
 
 ### Adding your own shader
 
@@ -164,23 +174,33 @@ The pipeline is intentionally faithful, including quirks. Known deviations:
 ## Project structure
 
 ```
-public/shaders/glsl/    22 stock NextUI shaders
-public/shaders/         default.glsl — the final scale pass
-public/samples/         drop your own screenshots here
-scripts/                asset manifest generator
+public/shaders/glsl/      24 stock NextUI shaders
+public/shaders/presets/   24 stock NextUI shader configs (incl. the per-system sets/)
+public/shaders/           default.glsl — the final scale pass · LICENSE · NOTICE
+public/samples/           game screenshots + index.json + NOTICE
+scripts/                  asset manifest generator
 src/core/
-  glsl-preprocess.ts    port of load_shader_from_file()
-  pragma-params.ts      #pragma parameter parsing + NextUI step quantization
-  scaling.ts            destination rect for all 5 scaling modes
-  pipeline.ts           the WebGL2 render graph
-  cfg.ts                minarch .cfg reader/writer
-  test-patterns.ts      generated console-resolution sources
-  state.ts              app state + localStorage
-src/components/         Lit web components (rsl-*)
+  glsl-preprocess.ts      port of load_shader_from_file()
+  pragma-params.ts        #pragma parameter parsing + NextUI step quantization
+  scaling.ts              destination rect for all 5 scaling modes
+  pipeline.ts             the WebGL2 render graph
+  cfg.ts                  minarch .cfg reader/writer
+  test-patterns.ts        generated console-resolution sources
+  state.ts                app state + localStorage
+src/components/           Lit web components (rsl-*)
 ```
 
-## Credits
+## Credits & licensing
 
-Shader pipeline semantics and the bundled GLSL shaders come from
-[NextUI](https://github.com/LoveRetro/NextUI); the shaders themselves originate from the
-[libretro](https://github.com/libretro/glsl-shaders) collection and keep their original licenses.
+RetroShader Lab is © 2026 Yohan Lasorsa and released under the **GNU GPL v3 or later**
+(see `LICENSE`), matching the license of NextUI it is derived from.
+
+- **Shaders and presets** in `public/shaders/` come from
+  [NextUI](https://github.com/LoveRetro/NextUI) (GPL-3.0) and are byte-identical copies. Most
+  shaders originate from the [libretro GLSL collection](https://github.com/libretro/glsl-shaders)
+  and keep the license stated in their own header — see `public/shaders/NOTICE`.
+- **Screenshots** in `public/samples/` come from
+  [libretro-thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails) `Named_Snaps`
+  (captured with shaders and filters off, at native resolution). They depict copyrighted works that
+  remain the property of their respective publishers and are **not** covered by this project's
+  license — see `public/samples/NOTICE`.
