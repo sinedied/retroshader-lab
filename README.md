@@ -10,6 +10,8 @@
 ![WebGL2](https://img.shields.io/badge/WebGL-2-990000?style=flat-square&logo=webgl&logoColor=white)
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-3DA639?style=flat-square)
 
+**[▶ Open the lab](https://sinedied.github.io/retroshader-lab/)**
+
 [Quick start](#quick-start) · [How it works](#how-it-works) · [CFG format](#cfg-format) · [Fidelity notes](#fidelity-notes) · [Project structure](#project-structure)
 
 </div>
@@ -40,6 +42,9 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 - Everything is persisted to `localStorage`
 
 ## Quick start
+
+The lab runs entirely in the browser — try it at
+**[sinedied.github.io/retroshader-lab](https://sinedied.github.io/retroshader-lab/)**, or run it locally:
 
 ```bash
 npm install
