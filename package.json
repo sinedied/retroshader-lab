@@ -1,0 +1,25 @@
+{
+  "name": "retroshader-lab",
+  "version": "0.1.0",
+  "description": "A browser lab for authoring and testing NextUI GLSL retro shader pipelines",
+  "scripts": {
+    "dev": "npm run shaders && vite",
+    "build": "npm run shaders && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "shaders": "node scripts/gen-shader-manifest.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5"
+  },
+  "dependencies": {
+    "lit": "^3.3.3"
+  },
+  "private": true
+}

@@ -1,0 +1,121 @@
+/* RetroShader Lab — phosphor instrument panel theme.
+   The chrome is a CRT lab bench; the render canvas itself is never filtered. */
+
+:root {
+  color-scheme: dark;
+
+  --void: #040605;
+  --void-2: #070b09;
+  --panel: #0a100d;
+  --panel-2: #0d1512;
+  --panel-3: #111b17;
+
+  --line: rgba(125, 255, 155, 0.12);
+  --line-strong: rgba(125, 255, 155, 0.28);
+
+  --phosphor: #7dff9b;
+  --phosphor-dim: #3d8f5b;
+  --amber: #ffb454;
+  --amber-dim: #8a6128;
+  --danger: #ff6b5f;
+
+  --ink: #cbe6d5;
+  --ink-dim: #6d8a7b;
+  --ink-faint: #47594f;
+
+  --font-display: 'Archivo', 'Helvetica Neue', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+
+  --radius: 3px;
+  --glow: 0 0 0 1px rgba(125, 255, 155, 0.16), 0 0 18px -6px rgba(125, 255, 155, 0.5);
+  --rail: 344px;
+  --dock: 404px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(120% 80% at 12% -10%, rgba(125, 255, 155, 0.07), transparent 60%),
+    radial-gradient(90% 70% at 100% 110%, rgba(255, 180, 84, 0.05), transparent 55%),
+    var(--void);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Fine scanlines over the chrome. The render canvas opts out via .no-crt. */
+.chrome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.2) 0px,
+    rgba(0, 0, 0, 0.2) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.3;
+  mix-blend-mode: multiply;
+}
+
+/* Layout lives in the component's :host rule — an outside `display` here would win
+   over :host and break the grid. */
+rsl-app {
+  height: 100%;
+  min-height: 0;
+}
+
+::selection {
+  background: rgba(125, 255, 155, 0.28);
+  color: #eafff0;
+}
+
+/* Scrollbars as thin instrument tracks */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--phosphor-dim) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--phosphor-dim), #24503a);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 6px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(var(--phosphor), var(--phosphor-dim));
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
