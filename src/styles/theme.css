@@ -1,5 +1,6 @@
 /* RetroShader Lab — phosphor instrument panel theme.
-   The chrome is a CRT lab bench; the render canvas itself is never filtered. */
+   Nothing is ever painted over the render canvas: no scanline overlay, no grain, no
+   blend modes or filters, so what you see on screen is exactly what the shader wrote. */
 
 :root {
   color-scheme: dark;
@@ -55,22 +56,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Fine scanlines over the chrome. The render canvas opts out via .no-crt. */
-.chrome-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.2) 0px,
-    rgba(0, 0, 0, 0.2) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-  opacity: 0.3;
-  mix-blend-mode: multiply;
-}
+/* No decorative scanline/grain overlay anywhere: the whole point of the lab is to
+   inspect real pixels, so nothing is ever painted on top of the render canvas. */
 
 /* Layout lives in the component's :host rule — an outside `display` here would win
    over :host and break the grid. */
