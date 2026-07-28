@@ -9,9 +9,17 @@
     "shaders": "node scripts/gen-shader-manifest.mjs",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
+  "keywords": [
+    "glsl",
+    "shader",
+    "retro",
+    "nextui",
+    "webgl",
+    "emulation",
+    "crt"
+  ],
+  "author": "Yohan Lasorsa",
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "devDependencies": {
     "@types/node": "^26.1.1",
