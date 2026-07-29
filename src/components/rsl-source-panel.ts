@@ -87,7 +87,7 @@ export class RslSourcePanel extends LitElement {
 
   @property({ attribute: false }) source: SourceImage | undefined = undefined;
   @property({ type: String }) system = 'gb';
-  @property({ type: String }) pattern: PatternKind = 'scene';
+  @property({ type: String }) pattern: PatternKind = 'grid';
   @property({ type: String }) sampleFile: string | undefined = undefined;
   @property({ attribute: false }) samples: SampleEntry[] = [];
   @property({ type: String }) uploadedName: string | undefined = undefined;

@@ -5,6 +5,9 @@ import type { PatternKind } from './test-patterns.js';
 
 const STORAGE_KEY = 'retroshader-lab:state';
 
+/** Screenshot shown on first run, when it is part of the bundled samples. */
+export const PREFERRED_SAMPLE = 'snes-super-mario-world.png';
+
 export type ViewMode = 'fit' | 'zoom';
 
 /** How the comparison panes are laid out over the stage. */
@@ -65,9 +68,10 @@ export function defaultPass(shader = 'pixellate.glsl'): PassConfig {
 
 export function defaultState(): AppState {
   return {
-    sourceSystem: 'gb',
-    sourcePattern: 'scene',
-    sampleFile: undefined,
+    // first run starts on a real screenshot rather than a synthetic pattern
+    sourceSystem: 'snes',
+    sourcePattern: 'grid',
+    sampleFile: PREFERRED_SAMPLE,
     uploadedName: undefined,
     outputWidth: 1024,
     outputHeight: 768,
@@ -218,6 +222,8 @@ export class Store {
         this.state.compareMode = 'overlay';
         this.state.dividers = [parsed.splitPosition ?? 0.5];
       }
+      // the "fake game scene" pattern was removed
+      if ((this.state.sourcePattern as string) === 'scene') this.state.sourcePattern = 'grid';
       if (this.state.paneCount !== 2 && this.state.paneCount !== 3) this.state.paneCount = 2;
       if (this.state.dividers.length !== this.state.paneCount - 1) {
         this.state.dividers = Store.dividersFor(this.state.paneCount);

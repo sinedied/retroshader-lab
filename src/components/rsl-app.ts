@@ -319,6 +319,11 @@ export class RslApp extends LitElement {
 
   private rebuildSource(): void {
     const state = this.appState;
+    if (state.sampleFile && !BUNDLED_SAMPLES.some((s) => s.file === state.sampleFile)) {
+      // the default screenshot is not bundled in this build: fall back to a pattern
+      store.update({ sampleFile: undefined });
+      return;
+    }
     if (state.sampleFile) {
       const url = `${import.meta.env.BASE_URL}samples/${state.sampleFile}`;
       void loadImageSource(url, state.sampleFile)
