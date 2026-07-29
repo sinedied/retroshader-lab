@@ -1,6 +1,18 @@
 /*
     crt-perfect-v4 - moire-free CRT scanlines and RGB mask with pixel-perfect
-    scaling, down to a 640x480 target. Public domain.
+    scaling, down to a 640x480 target.
+
+    Author:  sinedied
+    Licence: MIT - Copyright (c) 2026 sinedied
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of
+    this software and associated documentation files (the "Software"), to deal in
+    the Software without restriction, including without limitation the rights to
+    use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+    of the Software, and to permit persons to whom the Software is furnished to do
+    so, subject to the following conditions: the above copyright notice and this
+    permission notice shall be included in all copies or substantial portions of
+    the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 
     v4 of crt-perfect.glsl. Identical to v3 wherever there are enough output
     pixels per source line; adds a minimum pitch so the effect still works at low
@@ -108,14 +120,15 @@
       - Blending happens in gamma space, which makes edge midpoints slightly darker
         than physically correct. Across a one-pixel transition this is not visible,
         and it is what removes the dominant source of moire - see v3's header.
+
 */
 
 #pragma parameter Scanlines  "Scanline visibility"     0.55 0.00 1.00 0.05
 #pragma parameter RGB_Mask   "RGB mask visibility"     0.40 0.00 1.00 0.05
-#pragma parameter Mask_Type  "Mask 0off 1grille 2slot" 1.00 0.00 2.00 1.00
+#pragma parameter Mask_Type  "Mask 0=off 1=grille 2=slot" 1.00 0.00 2.00 1.00
 #pragma parameter Mask_Size  "Mask triads per pixel"   1.00 0.25 2.00 0.25
-#pragma parameter Brightness "Brightness"              1.25 0.25 4.00 0.05
-#pragma parameter Min_Pitch  "Min pitch, output px"    3.00 2.00 6.00 0.25
+#pragma parameter Brightness "Brightness"              1.25 0.50 4.00 0.05
+#pragma parameter Min_Pitch  "Min. pitch in px"        3.00 2.00 6.00 0.25
 
 #if defined(VERTEX)
 

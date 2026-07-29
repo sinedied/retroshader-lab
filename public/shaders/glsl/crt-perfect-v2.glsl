@@ -1,6 +1,17 @@
 /*
-    crt-perfect-v2 - pixel-perfect scaling with CRT scanlines and an RGB subpixel
-    mask for NextUI. Public domain.
+    crt-perfect-v2 - pixel-perfect scaling with CRT scanlines and an RGB subpixel mask.
+
+    Author:  sinedied
+    Licence: MIT - Copyright (c) 2026 sinedied
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of
+    this software and associated documentation files (the "Software"), to deal in
+    the Software without restriction, including without limitation the rights to
+    use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+    of the Software, and to permit persons to whom the Software is furnished to do
+    so, subject to the following conditions: the above copyright notice and this
+    permission notice shall be included in all copies or substantial portions of
+    the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 
     v2 of crt-perfect.glsl. Same look at normal scale factors, but the
     anti-aliasing guards are corrected and the mask costs one cosine less.
@@ -91,6 +102,7 @@
          constant, so blue is derived from red and green instead of computed.
       7. Area weights are applied separably, which drops the 1/(w*h)-sized
          totalArea divisor.
+
 */
 
 #pragma parameter Scanlines    "Scanline visibility"        0.55 0.00 1.00 0.05
