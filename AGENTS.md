@@ -124,10 +124,18 @@ Useful events: `preset-load|save|rename|update|delete`, `cfg-import`, `pass-add|
     batches far too short.
   - **But cap it** (`MAX_ITERATIONS`). At 600 the CPU could not queue commands fast enough, the GPU
     drained mid-run, and a one-pass shader measured the same as a three-pass one.
+  - **More samples is not free precision.** Measured across four repeats each: 30 rounds gives a
+    4.6% run-to-run spread on the *ratio* between two pipelines, 90 gives 2.8%, 300 gives 2.0% —
+    but by 300 the GPU is throttling and the absolute milliseconds climb run over run. 90 is the
+    knee. Read the Perf. column, not the milliseconds.
+  - **Warmup matters more than sample count.** After the GPU has been idle, 400ms of warmup left
+    the first quarter of a run reading ~35% high. It is `WARMUP_MS`, not `ROUND_PRESETS`, that
+    limits accuracy.
   - **Median and p10–p90, never mean and σ.** One compositor hitch moves a mean; it does not move
     a median.
-  - The modal backdrop is opaque with no `backdrop-filter`: the canvases render underneath during a
-    run, so anything translucent gets recomposited every frame and competes with the measurement.
+  - The modal backdrop has no `backdrop-filter`: a blur of the canvases rendering underneath would
+    be recomputed every frame and compete with the measurement. Plain alpha compositing is cheap,
+    so the backdrop being translucent is fine — only the blur was ever the problem.
 - **Timeouts must be wall-clock, not poll counts.** A `STALL_LIMIT` of 600 polls sounded generous
   and was ~30ms, so healthy queries were abandoned and every result came back `NaN`. Adding
   instrumentation made it disappear (it changed the timing) — a textbook Heisenbug.

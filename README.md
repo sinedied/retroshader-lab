@@ -96,13 +96,18 @@ resolution; **Current** exports just the edited pipeline.
 **Benchmark** measures the real GPU cost of each pane with timer queries — not CPU time, which
 would measure almost nothing — and reports the median GPU time per frame, a robust deviation and
 the p10–p90 spread, with a performance percentage relative to the current pipeline. Choose **Quick**
-(12 samples), **Standard** (30) or **Thorough** (90).
+(12 samples), **Standard** (30), **Thorough** (90) or **Extended** (300).
 
 Timing a GPU from a browser is mostly a fight against measuring the wrong thing, so the run keeps
 several rounds of work queued at all times — a GPU left waiting drops its clock, and the next sample
 then measures a slower chip — sizes each batch to a target duration so cheap shaders are not lost in
 timer quantization, and summarises with a median so one compositor hitch cannot drag a result
 around. Anything still too noisy to trust is flagged rather than reported as fact.
+
+**Read the Perf. column rather than the milliseconds.** The ratio between pipelines is stable; the
+absolute time is not, because a GPU throttles as it heats. Going from 30 to 90 samples tightens the
+ratio's run-to-run spread from ~4.6% to ~2.8%, but 300 only reaches ~2.0% while the absolute figures
+visibly drift upward — past a point, extra samples buy precision on a moving quantity.
 
 Expect the **first run after loading the page to be the noisiest**, since the GPU is still cold; a
 second run settles. The figures rank pipelines against each other on your GPU; they are not a
