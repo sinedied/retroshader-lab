@@ -2,6 +2,12 @@ import { css } from 'lit';
 
 /** Shared instrument-panel styling: rack modules, silkscreen labels, faders, chips. */
 export const panelStyles = css`
+  /* .module-body and .pass-body set display:flex, which would otherwise beat the UA
+     stylesheet's [hidden] { display: none } and leave folded panels on screen. */
+  [hidden] {
+    display: none !important;
+  }
+
   :host {
     font-family: var(--font-mono);
     color: var(--ink);
