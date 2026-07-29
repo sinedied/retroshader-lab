@@ -94,11 +94,19 @@ While comparing, **Export PNG 1:1** writes the comparison exactly as laid out, a
 resolution; **Current** exports just the edited pipeline.
 
 **Benchmark** measures the real GPU cost of each pane with timer queries — not CPU time, which
-would measure almost nothing — and reports mean, deviation and range over 30 runs after warmup,
-with a performance percentage relative to the current pipeline. Renders are batched per query and
-the panes are measured in interleaved rounds, otherwise the GPU clock drifts enough to rank a cheap
-shader above an expensive one. The figures rank pipelines against each other on your GPU; they are
-not a prediction of handheld performance.
+would measure almost nothing — and reports the median GPU time per frame, a robust deviation and
+the p10–p90 spread, with a performance percentage relative to the current pipeline. Choose **Quick**
+(12 samples), **Standard** (30) or **Thorough** (90).
+
+Timing a GPU from a browser is mostly a fight against measuring the wrong thing, so the run keeps
+several rounds of work queued at all times — a GPU left waiting drops its clock, and the next sample
+then measures a slower chip — sizes each batch to a target duration so cheap shaders are not lost in
+timer quantization, and summarises with a median so one compositor hitch cannot drag a result
+around. Anything still too noisy to trust is flagged rather than reported as fact.
+
+Expect the **first run after loading the page to be the noisiest**, since the GPU is still cold; a
+second run settles. The figures rank pipelines against each other on your GPU; they are not a
+prediction of handheld performance.
 
 ### Presets
 

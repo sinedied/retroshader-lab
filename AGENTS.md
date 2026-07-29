@@ -113,10 +113,24 @@ Useful events: `preset-load|save|rename|update|delete`, `cfg-import`, `pass-add|
 - Console should contain **only** Lit's dev-mode notice. Anything else is a regression.
 - Chrome will not resize below ~500px wide; `resize_page` clamps silently.
 - To sanity-check rendering, `gl.readPixels` on `app.main.gl`, or compare pane pixels.
-- Benchmarking uses `EXT_disjoint_timer_query_webgl2`. Two things are load-bearing and were found
-  the hard way: renders are **batched inside one query** and panes are measured in **interleaved
-  rounds**. Sampling one render at a time left the GPU idle between samples, its clock dropped, and
-  the spread hit ±45% — enough to rank an expensive shader above a cheap one.
+- Benchmarking uses `EXT_disjoint_timer_query_webgl2`, and everything about it is load-bearing —
+  each of these was measured, and each one produced a *wrong ranking* when absent:
+  - **Never wait on an idle GPU.** A drained GPU drops its clock and the next sample measures a
+    slower chip. `QUEUE_DEPTH` rounds are kept submitted at all times; only one query may be
+    *active*, but any number may be finished-and-unread, which is what makes this possible.
+    Switching the poll to `requestAnimationFrame` made it worse, not better — 16.7ms of idle.
+  - **Size batches to a duration, not a count.** `TARGET_BATCH_MS` picks iterations per pipeline,
+    re-derived from live samples, because a cold warmup reads ~10× steady state and would lock in
+    batches far too short.
+  - **But cap it** (`MAX_ITERATIONS`). At 600 the CPU could not queue commands fast enough, the GPU
+    drained mid-run, and a one-pass shader measured the same as a three-pass one.
+  - **Median and p10–p90, never mean and σ.** One compositor hitch moves a mean; it does not move
+    a median.
+  - The modal backdrop is opaque with no `backdrop-filter`: the canvases render underneath during a
+    run, so anything translucent gets recomposited every frame and competes with the measurement.
+- **Timeouts must be wall-clock, not poll counts.** A `STALL_LIMIT` of 600 polls sounded generous
+  and was ~30ms, so healthy queries were abandoned and every result came back `NaN`. Adding
+  instrumentation made it disappear (it changed the timing) — a textbook Heisenbug.
 
 ## Gotchas that actually bite
 
