@@ -12,6 +12,7 @@ npm run dev        # regenerates the manifest, then vite on :5180
 npm run build      # manifest + tsc --noEmit + vite build
 npm run shaders    # asset manifest only
 npm run typecheck
+npm run palette    # recolour a GB screenshot into a Gambatte palette
 ```
 
 - `src/generated/shader-manifest.json` is **gitignored and generated**. A fresh checkout (or a
@@ -156,6 +157,7 @@ Every one of these cost time in the session that built this repo.
 | Licensing and provenance of bundled assets | `public/shaders/NOTICE`, `public/samples/NOTICE` |
 | Screenshot sources and resolutions | `public/samples/index.json` |
 | Deploy pipeline | `.github/workflows/deploy.yml` |
+| Gambatte palette table (GPL-2.0, tooling only) | `scripts/vendor/` — see its `NOTICE` |
 | Owner's backlog (read-only) | `TODO` |
 | Device-side truth for any pipeline question | `~/projects/NextUI` (see the table above) |
 

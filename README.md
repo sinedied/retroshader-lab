@@ -106,6 +106,20 @@ deleted. A dot next to the name means the pipeline has diverged from what was sa
 A user preset holds the same cfg text the panel shows, so loading one is identical to loading a
 `.cfg` file — including any core options it carries.
 
+### Recolouring a Game Boy screenshot
+
+Game Boy shots are usually captured in flat greyscale. `npm run palette` recolours one into any of
+Gambatte's 543 palettes:
+
+```bash
+npm run palette -- --list "TWB64 04"
+npm run palette -- public/samples/gb-tetris.png "TWB64 040 - DMG Ver."
+```
+
+Indexed PNGs — what most screenshots are — are recoloured by rewriting the palette chunk, so the
+pixels themselves are untouched. Colours are quantized to 5 bits per channel the way Gambatte packs
+them, so they match what the handheld displays.
+
 ### Adding your own shader
 
 Drag a `.glsl` file anywhere onto the page, or drop it in `public/shaders/glsl/` and re-run `npm run dev`.

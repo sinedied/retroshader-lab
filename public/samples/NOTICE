@@ -31,3 +31,10 @@ by the GPL that applies to the rest of this project.
 If you are a rights holder and want an image removed, delete the file from this
 directory and its entry from index.json — the lab falls back to its built-in
 generated test patterns.
+
+Palettes
+--------
+The two Game Boy screenshots were captured in the flat four-shade greyscale and have
+been recoloured to Gambatte's "TWB64 040 - DMG Ver." palette with `npm run palette`.
+Only the PLTE chunk was rewritten, so the pixels are the originals untouched. The
+greyscale versions are kept in `originals/`, which the asset manifest does not scan.
