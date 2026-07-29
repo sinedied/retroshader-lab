@@ -55,8 +55,10 @@ export class RslApp extends LitElement {
       header.masthead {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 10px 16px;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        min-width: 0;
+        padding: 10px 14px;
         border-bottom: 1px solid var(--line);
         background: linear-gradient(180deg, var(--panel-2), var(--void-2));
       }
@@ -65,6 +67,16 @@ export class RslApp extends LitElement {
         display: flex;
         align-items: baseline;
         gap: 9px;
+        min-width: 0;
+      }
+
+      .logo .sub {
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        font-family: var(--font-display);
+        font-variation-settings: 'wdth' 108, 'wght' 500;
       }
 
       .logo .mark {
@@ -80,15 +92,6 @@ export class RslApp extends LitElement {
         font-style: normal;
         color: var(--phosphor);
         text-shadow: 0 0 22px rgba(125, 255, 155, 0.55);
-      }
-
-      .logo .sub {
-        font-size: 10px;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        color: var(--ink-faint);
-        font-family: var(--font-display);
-        font-variation-settings: 'wdth' 108, 'wght' 500;
       }
 
       .masthead .spacer {
@@ -142,10 +145,13 @@ export class RslApp extends LitElement {
         display: none !important;
       }
 
-      /* Explicit placement: hiding a panel sets display:none, which would otherwise
-         pull the remaining items into the wrong grid tracks. */
+      /* Explicit placement, columns *and* rows: hiding a panel sets display:none,
+         which removes it from the grid, and auto-placement would then pull the
+         remaining items into the wrong tracks. */
       .rail {
         grid-column: 1;
+        grid-row: 1;
+        min-width: 0;
         min-height: 0;
         overflow-y: auto;
         padding: 10px;
@@ -155,11 +161,14 @@ export class RslApp extends LitElement {
 
       rsl-viewport {
         grid-column: 2;
+        grid-row: 1;
         min-width: 0;
       }
 
       rsl-dock {
         grid-column: 3;
+        grid-row: 1;
+        min-width: 0;
       }
 
       .footer-note {
@@ -190,14 +199,30 @@ export class RslApp extends LitElement {
         }
 
         .rail {
+          grid-row: 1;
+          /* cap the rail and let it scroll on its own, so the preview stays
+             just below it instead of being pushed off the page */
+          /* a scroll container's automatic minimum is 0, so grid would squeeze
+             the rail to nothing: pin a usable floor and cap the rest */
+          min-height: 240px;
+          max-height: 40vh;
+          overflow-y: auto;
           border-right: 0;
           border-bottom: 1px solid var(--line);
         }
 
+        rsl-viewport {
+          grid-row: 2;
+        }
+
         rsl-dock {
+          grid-row: 3;
+          /* height:100% would resolve against an auto row and collapse the dock */
+          height: auto;
+          min-height: 300px;
+          max-height: 45vh;
           border-left: 0;
           border-top: 1px solid var(--line);
-          max-height: 60vh;
         }
       }
     `
@@ -477,14 +502,14 @@ export class RslApp extends LitElement {
         <div class="seg">
           <button
             aria-pressed=${state.showRail}
-            title="Toggle the left panel  ( [ )"
+              title="Toggle the left panel  ( [ )"
             @click=${() => store.update({ showRail: !state.showRail })}
           >
             ▤ Panels
           </button>
           <button
             aria-pressed=${state.showDock}
-            title="Toggle the right panel  ( ] )"
+              title="Toggle the right panel  ( ] )"
             @click=${() => store.update({ showDock: !state.showDock })}
           >
             ▤ CFG
