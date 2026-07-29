@@ -315,6 +315,16 @@ export const panelStyles = css`
     font-weight: 500;
   }
 
+  .chip.warn {
+    border-color: var(--amber-dim);
+    color: var(--amber);
+    cursor: help;
+  }
+
+  .chip.warn b {
+    color: var(--amber);
+  }
+
   .hint {
     color: var(--ink-faint);
     font-size: 10.5px;

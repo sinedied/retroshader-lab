@@ -51,6 +51,15 @@ export interface AppState {
   panes: [ComparePane, ComparePane];
   /** Overlay divider positions, normalized: one for 2 panes, two for 3. */
   dividers: number[];
+  /**
+   * The comparison frame, in export pixels: the rectangle the panes divide and the size the
+   * composite PNG is written at. Independent of the output resolution so a comparison can be
+   * a wide strip of a tall render. `0` means "follow the output resolution".
+   */
+  compareWidth: number;
+  compareHeight: number;
+  /** Burn the pane labels into the exported comparison PNG. */
+  exportLabels: boolean;
 
   /** Collapsed state of the foldable panels, keyed by panel id. */
   collapsed: Record<string, boolean>;
@@ -99,6 +108,10 @@ export function defaultState(): AppState {
     paneCount: 2,
     panes: [{ preset: undefined }, { preset: undefined }],
     dividers: [0.5],
+    // 0 = follow the output resolution, so the comparison is unchanged until it is set
+    compareWidth: 0,
+    compareHeight: 0,
+    exportLabels: true,
     collapsed: {},
     showRail: true,
     showDock: true,
@@ -238,6 +251,14 @@ export class Store {
       if (this.state.dividers.length !== this.state.paneCount - 1) {
         this.state.dividers = Store.dividersFor(this.state.paneCount);
       }
+      // sessions saved before the comparison frame existed have neither field
+      if (!Number.isFinite(this.state.compareWidth) || this.state.compareWidth < 0) {
+        this.state.compareWidth = 0;
+      }
+      if (!Number.isFinite(this.state.compareHeight) || this.state.compareHeight < 0) {
+        this.state.compareHeight = 0;
+      }
+      if (typeof this.state.exportLabels !== 'boolean') this.state.exportLabels = true;
       this.state.pipeline.passes = (this.state.pipeline.passes ?? []).slice(0, 3);
     } catch {
       this.state = defaultState();

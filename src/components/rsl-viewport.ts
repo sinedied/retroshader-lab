@@ -8,6 +8,24 @@ import type { CompareMode, ComparePane } from '../core/state.js';
 const ZOOM_LEVELS = [0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 16];
 const STAGE_PADDING = 44;
 
+/** Matches the `.tag` colours so a burnt-in label looks like the on-screen one. */
+const LABEL_COLORS = [
+  { bg: '#7dff9b', fg: '#04120a' },
+  { bg: '#ffb454', fg: '#1a1200' },
+  { bg: '#7db4ff', fg: '#04101f' }
+];
+/** Mirrors `--font-display` so a burnt-in label matches the on-screen one. */
+const LABEL_FONT = "'Archivo', 'Helvetica Neue', sans-serif";
+
+/** Handy comparison shapes: wide strips for side-by-side, plus common capture sizes. */
+const FRAME_PRESETS: [number, number][] = [
+  [1200, 400],
+  [1920, 640],
+  [1280, 720],
+  [1920, 1080],
+  [1024, 768]
+];
+
 /**
  * Render viewport. Owns one WebGL canvas per comparison pane and lays them out in one of
  * three ways:
@@ -85,6 +103,36 @@ export class RslViewport extends LitElement {
         padding-bottom: 4px;
       }
 
+      .frame-pick {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex: 0 1 auto;
+        min-width: 0;
+      }
+
+      .frame-pick select {
+        width: auto;
+        min-width: 96px;
+        max-width: 190px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+      }
+
+      .frame-pick input.num {
+        width: 62px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        text-align: right;
+      }
+
+      /* .label is a block by default, which would break the toolbar row */
+      .label.inline {
+        display: inline-block;
+        margin-bottom: 0;
+        white-space: nowrap;
+      }
+
       .tag {
         font-family: var(--font-display);
         font-variation-settings: 'wdth' 118, 'wght' 700;
@@ -127,6 +175,21 @@ export class RslViewport extends LitElement {
         cursor: grabbing;
       }
 
+      /**
+       * The comparison frame: the rectangle the panes divide, and exactly what the
+       * composite export writes. Sized in export pixels, then scaled down only if it
+       * cannot fit the stage.
+       */
+      .frame {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        overflow: hidden;
+        background: #000;
+        box-shadow: 0 0 0 1px var(--line-strong), 0 28px 70px -40px rgba(125, 255, 155, 0.5);
+      }
+
       .pane {
         position: absolute;
         top: 0;
@@ -140,6 +203,11 @@ export class RslViewport extends LitElement {
         image-rendering: pixelated;
         background: #000;
         box-shadow: 0 0 0 1px var(--line-strong), 0 28px 70px -40px rgba(125, 255, 155, 0.5);
+      }
+
+      /* inside the frame the canvas is a crop, so it must not paint its own border */
+      .frame canvas {
+        box-shadow: none;
       }
 
       .pane-label {
@@ -218,6 +286,11 @@ export class RslViewport extends LitElement {
   @property({ type: Number }) paneCount: 2 | 3 = 2;
   @property({ attribute: false }) panes: ComparePane[] = [];
   @property({ attribute: false }) dividers: number[] = [0.5];
+  @property({ type: Number }) compareWidth = 0;
+  @property({ type: Number }) compareHeight = 0;
+  @property({ type: Boolean }) exportLabels = true;
+  /** Pane labels resolved by the app, which knows the saved preset names. */
+  @property({ attribute: false }) labels: string[] = [];
   @property({ attribute: false }) presets: string[] = [];
   @property({ attribute: false }) dstRect: Rect | undefined = undefined;
   @property({ type: Number }) renderMs = 0;
@@ -228,6 +301,7 @@ export class RslViewport extends LitElement {
   @state() private grabbing = false;
 
   @query('.stage') private stage!: HTMLDivElement;
+  @query('.frame') private frame!: HTMLDivElement | null;
   @queryAll('canvas') private canvasList!: NodeListOf<HTMLCanvasElement>;
 
   private resizeObserver: ResizeObserver | undefined;
@@ -260,10 +334,52 @@ export class RslViewport extends LitElement {
     return this.viewMode === 'fit' ? this.fitScale : this.zoom;
   }
 
-  /** Width of the window each pane shows, which is what panning is clamped against. */
+  /** True while the comparison frame governs the layout. */
+  private get framed(): boolean {
+    return this.compareMode !== 'off';
+  }
+
+  /** The comparison frame in export pixels; falls back to the output resolution. */
+  private get frameW(): number {
+    return this.framed && this.compareWidth > 0 ? this.compareWidth : this.width;
+  }
+
+  private get frameH(): number {
+    return this.framed && this.compareHeight > 0 ? this.compareHeight : this.height;
+  }
+
+  /**
+   * How much the frame is shrunk purely to fit on screen. Capped at 1 so the frame is
+   * pixel-exact whenever it fits, and the export never depends on the window size.
+   */
+  private get displayScale(): number {
+    if (!this.framed) return 1;
+    const availableW = Math.max(64, (this.stage?.clientWidth ?? this.frameW) - STAGE_PADDING);
+    const availableH = Math.max(64, (this.stage?.clientHeight ?? this.frameH) - STAGE_PADDING);
+    return Math.min(1, availableW / this.frameW, availableH / this.frameH);
+  }
+
+  /** Width of the window a single pane shows, in frame pixels. */
+  private get paneWindowW(): number {
+    return this.compareMode === 'side-by-side' ? this.frameW / this.visiblePanes : this.frameW;
+  }
+
+  /**
+   * Width of the window each pane shows, which is what panning is clamped against.
+   *
+   * Outside the comparison this is the stage, as before. Inside it, it is the frame — the
+   * clamp must not depend on the browser window, or the export would only match the screen
+   * by coincidence and the pannable range would shift whenever the window is resized.
+   */
   private get paneWidth(): number {
+    if (this.framed) return this.paneWindowW;
     const stageWidth = this.stage?.clientWidth ?? this.width;
-    return this.compareMode === 'side-by-side' ? stageWidth / this.visiblePanes : stageWidth;
+    return stageWidth;
+  }
+
+  /** Height of the window a pane shows, in the same coordinates as `paneWidth`. */
+  private get paneHeight(): number {
+    return this.framed ? this.frameH : (this.stage?.clientHeight ?? this.height);
   }
 
   override firstUpdated(): void {
@@ -300,11 +416,19 @@ export class RslViewport extends LitElement {
     }
   }
 
-  /** Fit always targets the whole stage, even when it is split into columns. */
+  /**
+   * Fit targets the whole stage normally, and the pane's window inside the frame while
+   * comparing — the frame is in export pixels, so fitting to the stage would make the
+   * exported result depend on the window size.
+   */
   private updateFitScale(): void {
     if (!this.stage) return;
-    const availableW = Math.max(64, this.stage.clientWidth - STAGE_PADDING);
-    const availableH = Math.max(64, this.stage.clientHeight - STAGE_PADDING);
+    const availableW = this.framed
+      ? this.paneWindowW
+      : Math.max(64, this.stage.clientWidth - STAGE_PADDING);
+    const availableH = this.framed
+      ? this.frameH
+      : Math.max(64, this.stage.clientHeight - STAGE_PADDING);
     const scale = Math.min(availableW / this.width, availableH / this.height, 1);
     if (Math.abs(scale - this.fitScale) > 0.0001) this.fitScale = scale;
   }
@@ -315,13 +439,7 @@ export class RslViewport extends LitElement {
 
   /** Keeps the scene from being dragged out of the window a pane shows. */
   private clampPan(pan: { x: number; y: number }): { x: number; y: number } {
-    const scale = this.scale;
-    const maxX = Math.max(0, (this.width * scale - this.paneWidth) / 2);
-    const maxY = Math.max(0, (this.height * scale - (this.stage?.clientHeight ?? 0)) / 2);
-    return {
-      x: Math.min(maxX, Math.max(-maxX, pan.x)),
-      y: Math.min(maxY, Math.max(-maxY, pan.y))
-    };
+    return this.clampPanFor(this.scale, pan);
   }
 
   private setZoom(zoom: number): void {
@@ -334,7 +452,7 @@ export class RslViewport extends LitElement {
 
   private clampPanFor(zoom: number, pan: { x: number; y: number }): { x: number; y: number } {
     const maxX = Math.max(0, (this.width * zoom - this.paneWidth) / 2);
-    const maxY = Math.max(0, (this.height * zoom - (this.stage?.clientHeight ?? 0)) / 2);
+    const maxY = Math.max(0, (this.height * zoom - this.paneHeight) / 2);
     return {
       x: Math.min(maxX, Math.max(-maxX, pan.x)),
       y: Math.min(maxY, Math.max(-maxY, pan.y))
@@ -353,12 +471,16 @@ export class RslViewport extends LitElement {
     const startX = event.clientX;
     const startY = event.clientY;
     const origin = { ...this.pan };
+    // pointer deltas are CSS pixels; pan is frame pixels while the frame is shown scaled
+    const ds = this.displayScale || 1;
     this.grabbing = true;
     const move = (e: PointerEvent) => {
-      this.emit(
-        'view-change',
-        { pan: this.clampPan({ x: origin.x + (e.clientX - startX), y: origin.y + (e.clientY - startY) }) }
-      );
+      this.emit('view-change', {
+        pan: this.clampPan({
+          x: origin.x + (e.clientX - startX) / ds,
+          y: origin.y + (e.clientY - startY) / ds
+        })
+      });
     };
     const up = () => {
       this.grabbing = false;
@@ -374,7 +496,8 @@ export class RslViewport extends LitElement {
     event.stopPropagation();
     event.preventDefault();
     const move = (e: PointerEvent) => {
-      const rect = this.stage.getBoundingClientRect();
+      // dividers are fractions of the frame, not of the stage around it
+      const rect = (this.frame ?? this.stage).getBoundingClientRect();
       const position = (e.clientX - rect.left) / rect.width;
       const dividers = [...this.dividers];
       const lower = index === 0 ? 0.02 : dividers[index - 1] + 0.02;
@@ -390,8 +513,13 @@ export class RslViewport extends LitElement {
     window.addEventListener('pointerup', up);
   }
 
-  /** Label shown over a pane: pane 0 is always the pipeline being edited. */
+  /**
+   * Label shown over a pane. The app supplies them when it can name the current pipeline
+   * from a saved preset; otherwise pane 0 is simply the pipeline being edited.
+   */
   private labelFor(index: number): string {
+    const supplied = this.labels[index];
+    if (supplied) return supplied;
     if (index === 0) return 'Current';
     return paneLabel(this.panes[index - 1]?.preset);
   }
@@ -414,10 +542,20 @@ export class RslViewport extends LitElement {
 
   /** The scene is centred inside its own layer, then offset by the shared pan. */
   private canvasStyle(): string {
-    const scale = this.scale;
+    // pan is in frame pixels while comparing, so it scales with the frame on screen
+    const ds = this.displayScale;
+    const scale = this.scale * ds;
     const w = Math.round(this.width * scale);
     const h = Math.round(this.height * scale);
-    return `width:${w}px;height:${h}px;left:calc(50% - ${w / 2}px + ${this.pan.x}px);top:calc(50% - ${h / 2}px + ${this.pan.y}px)`;
+    const x = this.pan.x * ds;
+    const y = this.pan.y * ds;
+    return `width:${w}px;height:${h}px;left:calc(50% - ${w / 2}px + ${x}px);top:calc(50% - ${h / 2}px + ${y}px)`;
+  }
+
+  /** The frame itself, in CSS pixels. */
+  private frameStyle(): string {
+    const ds = this.displayScale;
+    return `width:${Math.round(this.frameW * ds)}px;height:${Math.round(this.frameH * ds)}px`;
   }
 
   private labelStyle(index: number): string {
@@ -437,59 +575,116 @@ export class RslViewport extends LitElement {
   }
 
   /**
-   * Downloads the comparison exactly as laid out, at the output resolution: bands for
-   * overlay, equal columns cropped around the current pan for side-by-side.
+   * Downloads the comparison exactly as laid out, at the comparison frame size.
+   *
+   * The geometry is deliberately the same arithmetic the screen uses: each pane draws its
+   * canvas scaled by `zoom`, centred in its window and offset by the shared pan. Because
+   * panning is clamped against the frame rather than the browser window, the exported PNG
+   * matches what is on screen regardless of how the window is sized.
    */
-  exportComposite(fileName: string): void {
+  async exportComposite(fileName: string): Promise<void> {
     const panes = this.visiblePanes;
     if (this.compareMode === 'off' || panes < 2) {
       this.exportPng(fileName);
       return;
     }
 
+    const frameW = Math.max(1, Math.round(this.frameW));
+    const frameH = Math.max(1, Math.round(this.frameH));
     const canvas = document.createElement('canvas');
-    canvas.width = this.width;
-    canvas.height = this.height;
+    canvas.width = frameW;
+    canvas.height = frameH;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, frameW, frameH);
 
     const sources = this.canvases;
-    if (this.compareMode === 'overlay') {
-      for (let i = 0; i < panes; i++) {
-        const start = i === 0 ? 0 : this.dividers[i - 1];
-        const end = i === panes - 1 ? 1 : this.dividers[i];
-        const x = Math.round(start * this.width);
-        const w = Math.round((end - start) * this.width);
-        if (w > 0 && sources[i]) ctx.drawImage(sources[i], x, 0, w, this.height, x, 0, w, this.height);
-      }
-    } else {
-      const scale = this.scale;
-      const colWidth = this.width / panes;
-      // same centring rule as on screen, expressed in output pixels
-      const sourceX = (this.width - colWidth) / 2 - this.pan.x / scale;
-      const sourceY = -this.pan.y / scale;
-      for (let i = 0; i < panes; i++) {
-        if (!sources[i]) continue;
-        ctx.drawImage(
-          sources[i],
-          sourceX,
-          sourceY,
-          colWidth,
-          this.height,
-          Math.round(i * colWidth),
-          0,
-          Math.round(colWidth),
-          this.height
-        );
-      }
+    const scale = this.scale;
+    const drawW = this.width * scale;
+    const drawH = this.height * scale;
+    const top = (frameH - drawH) / 2 + this.pan.y;
+    const columnW = frameW / panes;
+
+    for (let i = 0; i < panes; i++) {
+      const source = sources[i];
+      if (!source) continue;
+
+      // the band of the frame this pane owns
+      const bandStart =
+        this.compareMode === 'side-by-side'
+          ? i * columnW
+          : (i === 0 ? 0 : this.dividers[i - 1]) * frameW;
+      const bandEnd =
+        this.compareMode === 'side-by-side'
+          ? (i + 1) * columnW
+          : (i === panes - 1 ? 1 : this.dividers[i]) * frameW;
+      const bandW = bandEnd - bandStart;
+      if (bandW <= 0) continue;
+
+      // side by side centres each render in its own column; overlay centres in the frame
+      const left =
+        this.compareMode === 'side-by-side'
+          ? bandStart + (columnW - drawW) / 2 + this.pan.x
+          : (frameW - drawW) / 2 + this.pan.x;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(bandStart, 0, bandW, frameH);
+      ctx.clip();
+      ctx.drawImage(source, left, top, drawW, drawH);
+      ctx.restore();
     }
+
+    if (this.exportLabels) await this.drawExportLabels(ctx, frameW, panes, columnW);
 
     canvas.toBlob((blob) => {
       if (blob) this.download(blob, fileName);
     }, 'image/png');
+  }
+
+  /**
+   * Burns the pane labels into an exported comparison.
+   *
+   * `document.fonts.ready` is awaited because a canvas 2D context silently falls back to a
+   * default face for a webfont that has not finished loading, which would quietly produce
+   * a different image from the one on screen.
+   */
+  private async drawExportLabels(
+    ctx: CanvasRenderingContext2D,
+    frameW: number,
+    panes: number,
+    columnW: number
+  ): Promise<void> {
+    try {
+      await document.fonts.ready;
+    } catch {
+      // fonts API unavailable: fall through and draw with whatever is resolved
+    }
+
+    const size = Math.max(11, Math.round(Math.min(frameW / panes / 14, this.frameH / 16)));
+    const padX = Math.round(size * 0.5);
+    const padY = Math.round(size * 0.34);
+    const margin = Math.round(size * 0.8);
+    ctx.font = `700 ${size}px ${LABEL_FONT}`;
+    ctx.textBaseline = 'top';
+
+    for (let i = 0; i < panes; i++) {
+      const text = this.labelFor(i);
+      const bandStart =
+        this.compareMode === 'side-by-side'
+          ? i * columnW
+          : (i === 0 ? 0 : this.dividers[i - 1]) * frameW;
+      const width = ctx.measureText(text).width;
+      const x = bandStart + margin;
+      const y = margin;
+
+      ctx.fillStyle = LABEL_COLORS[i]?.bg ?? LABEL_COLORS[0].bg;
+      ctx.fillRect(x, y, width + padX * 2, size + padY * 2);
+      ctx.fillStyle = LABEL_COLORS[i]?.fg ?? LABEL_COLORS[0].fg;
+      ctx.fillText(text, x + padX, y + padY);
+    }
   }
 
   private download(blob: Blob, fileName: string): void {
@@ -565,6 +760,7 @@ export class RslViewport extends LitElement {
           </button>
         </div>
         ${this.renderPanePicker(0)} ${this.paneCount === 3 ? this.renderPanePicker(1) : nothing}
+        ${this.renderFrameControls()}
         <span class="spacer"></span>
         <button
           class="ghost"
@@ -600,6 +796,89 @@ export class RslViewport extends LitElement {
         </button>
       </div>
     `;
+  }
+
+  /**
+   * Frame size and label controls. The size is what the composite PNG is written at, and
+   * what the panes divide on screen, so the two cannot drift apart.
+   */
+  private renderFrameControls() {
+    const presets = FRAME_PRESETS.map(([w, h]) => `${w}×${h}`);
+    const current = `${this.frameW}×${this.frameH}`;
+    return html`
+      <div class="frame-pick">
+        <span class="label inline">Frame</span>
+        <select
+          aria-label="Comparison frame size"
+          title="Size of the comparison, and of the exported PNG"
+          @change=${(e: Event) => this.onFramePreset((e.target as HTMLSelectElement).value)}
+        >
+          <option value="output" ?selected=${this.compareWidth === 0 && this.compareHeight === 0}>
+            Output (${this.width}×${this.height})
+          </option>
+          ${FRAME_PRESETS.map(
+            ([w, h], i) => html`
+              <option
+                value=${`${w}x${h}`}
+                ?selected=${this.compareWidth === w && this.compareHeight === h}
+              >
+                ${presets[i]}
+              </option>
+            `
+          )}
+          ${!presets.includes(current) && this.compareWidth > 0
+            ? html`<option value="custom" selected>${current}</option>`
+            : nothing}
+        </select>
+        <input
+          class="num"
+          type="number"
+          min="16"
+          max="8192"
+          step="1"
+          aria-label="Comparison frame width"
+          .value=${String(this.frameW)}
+          @change=${(e: Event) =>
+            this.onFrameSize(Number((e.target as HTMLInputElement).value), this.frameH)}
+        />
+        <span class="label inline">×</span>
+        <input
+          class="num"
+          type="number"
+          min="16"
+          max="8192"
+          step="1"
+          aria-label="Comparison frame height"
+          .value=${String(this.frameH)}
+          @change=${(e: Event) =>
+            this.onFrameSize(this.frameW, Number((e.target as HTMLInputElement).value))}
+        />
+        <button
+          class="ghost"
+          aria-pressed=${this.exportLabels}
+          aria-label="Include labels in the export"
+          title="Burn the pane labels into the exported PNG"
+          @click=${() => this.emit('compare-change', { exportLabels: !this.exportLabels })}
+        >
+          🏷<span class="btn-label">Labels</span>
+        </button>
+      </div>
+    `;
+  }
+
+  private onFramePreset(value: string): void {
+    if (value === 'output') {
+      this.emit('compare-change', { compareWidth: 0, compareHeight: 0 });
+      return;
+    }
+    const [w, h] = value.split('x').map(Number);
+    if (Number.isFinite(w) && Number.isFinite(h)) this.onFrameSize(w, h);
+  }
+
+  private onFrameSize(width: number, height: number): void {
+    const clamp = (value: number) => Math.min(8192, Math.max(16, Math.round(value)));
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+    this.emit('compare-change', { compareWidth: clamp(width), compareHeight: clamp(height) });
   }
 
   override render() {
@@ -689,6 +968,7 @@ export class RslViewport extends LitElement {
         class="stage ${this.grabbing ? 'grabbing' : ''}"
         @pointerdown=${this.onPan}
       >
+        <div class="frame" style=${comparing ? this.frameStyle() : 'width:100%;height:100%'}>
         ${[0, 1, 2].map(
           (index) => html`
             <div
@@ -724,6 +1004,7 @@ export class RslViewport extends LitElement {
             </div>
           `
         )}
+        </div>
       </div>
 
       <div class="status">
@@ -737,8 +1018,18 @@ export class RslViewport extends LitElement {
         ${comparing
           ? html`<span class="chip">Panes <b>${panes}</b> · ${this.compareMode}</span>`
           : nothing}
+        ${comparing
+          ? html`<span class="chip">Frame <b>${this.frameW}×${this.frameH}</b></span>`
+          : nothing}
+        ${comparing && this.displayScale < 0.999
+          ? html`<span
+              class="chip warn"
+              title="The frame is larger than the window, so it is shown scaled down. The exported PNG is still exact."
+              >Shown at <b>${(this.displayScale * 100).toFixed(0)}%</b></span
+            >`
+          : nothing}
         <span class="spacer"></span>
-        <span class="chip">Frame <b>${this.renderMs.toFixed(1)} ms</b></span>
+        <span class="chip">Render <b>${this.renderMs.toFixed(1)} ms</b></span>
       </div>
     `;
   }
