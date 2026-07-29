@@ -102,6 +102,9 @@ While comparing, the panes divide a rectangle measured in **export pixels** (`co
 - **Panning is clamped against the frame, never against the stage.** This is the whole point: it is
   what makes the exported PNG match the screen. It used to clamp against `stage.clientWidth`, so the
   pannable range moved when the window was resized and the export agreed only by coincidence.
+- **Re-clamp whenever the window a pane shows changes**, not just on drag and zoom. Dragging to the
+  edge of a narrow frame and then widening it left the pan at its old limit and opened a 253px black
+  gap. `updated()` watches frame size, compare mode, pane count and output size.
 - `exportComposite()` deliberately repeats the screen's arithmetic rather than inverting it into
   source rectangles. If you change one, change the other — a unit check that both place the render
   identically across modes, pane counts, frame sizes, zooms and pans is cheap to write and catches
@@ -134,6 +137,19 @@ toggle the rails.
 - Console should contain **only** Lit's dev-mode notice. Anything else is a regression.
 - Chrome will not resize below ~500px wide; `resize_page` clamps silently.
 - To sanity-check rendering, `gl.readPixels` on `app.main.gl`, or compare pane pixels.
+- **If the chrome-devtools MCP tools are unavailable**, headless Chrome over CDP works and needs no
+  dependencies — Node has a built-in `WebSocket`:
+
+  ```sh
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+    --remote-debugging-port=9333 --user-data-dir=/tmp/rslchrome --enable-unsafe-swiftshader &
+  curl -s http://127.0.0.1:9333/json/list          # grab webSocketDebuggerUrl
+  ```
+
+  Then `Runtime.evaluate` with `awaitPromise` and `returnByValue`. WebGL works. This is how the
+  comparison frame was verified: overriding `viewport.download` captures an export as a `Blob`, and
+  `createImageBitmap` + `getImageData` turns "are the labels there?" into a pixel count rather than
+  an opinion.
 - Benchmarking uses `EXT_disjoint_timer_query_webgl2`, and everything about it is load-bearing —
   each of these was measured, and each one produced a *wrong ranking* when absent:
   - **Never wait on an idle GPU.** A drained GPU drops its clock and the next sample measures a
