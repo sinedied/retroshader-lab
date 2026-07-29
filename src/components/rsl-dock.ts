@@ -309,7 +309,14 @@ export class RslDock extends LitElement {
     input.click();
   }
 
-  /** Paints a pass readback (bottom-up RGBA) into a thumbnail canvas. */
+  /**
+   * Paints a pass readback into a thumbnail canvas.
+   *
+   * No row flip: `readPixels` hands back rows bottom-up, but the pipeline deliberately
+   * renders intermediate passes upside down (the NextUI Y quirk, undone by
+   * `default.glsl` at the very end), so the two cancel out and the buffer is already in
+   * display order. Flipping here is what made the thumbnails appear inverted.
+   */
   private thumbFor(info: PassRenderInfo): HTMLCanvasElement | typeof nothing {
     if (!info.pixels) return nothing;
     const { dstw, dsth } = info.sizes;
@@ -322,11 +329,7 @@ export class RslDock extends LitElement {
     const ctx = canvas.getContext('2d');
     if (!ctx) return nothing;
     const image = ctx.createImageData(dstw, dsth);
-    const rowBytes = dstw * 4;
-    for (let y = 0; y < dsth; y++) {
-      const src = (dsth - 1 - y) * rowBytes;
-      image.data.set(info.pixels.subarray(src, src + rowBytes), y * rowBytes);
-    }
+    image.data.set(info.pixels.subarray(0, dstw * dsth * 4));
     ctx.putImageData(image, 0, 0);
     return canvas;
   }
