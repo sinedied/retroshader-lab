@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, query, state } from 'lit/decorators.js';
 import { panelStyles, bootStyles } from './shared-styles.js';
 import './rsl-source-panel.js';
@@ -34,6 +34,13 @@ import {
   fetchShaderSource
 } from '../core/shader-library.js';
 import { computeDstRect } from '../core/scaling.js';
+import {
+  encodeShareUrl,
+  decodeShare,
+  readShareFragment,
+  normaliseCfg,
+  canShare
+} from '../core/share.js';
 import { exportCfg, importCfg } from '../core/cfg.js';
 import { defaultValue, isConfigurable, quantize } from '../core/pragma-params.js';
 import { store, defaultPass, type AppState } from '../core/state.js';
@@ -61,9 +68,25 @@ export class RslApp extends LitElement {
     css`
       :host {
         display: grid;
-        grid-template-rows: auto minmax(0, 1fr);
+        /* three explicit rows, and every child is placed explicitly below. The share bar
+           is conditional, and letting auto-placement handle that would drop main into an
+           implicit row and cost it its minmax(0, 1fr) sizing — the same bug that
+           collapsed the viewport twice before. Row 2 collapses to 0 when empty. */
+        grid-template-rows: auto auto minmax(0, 1fr);
         height: 100%;
         min-height: 0;
+      }
+
+      header.masthead {
+        grid-row: 1;
+      }
+
+      .share-bar {
+        grid-row: 2;
+      }
+
+      main {
+        grid-row: 3;
       }
 
       header.masthead {
@@ -145,6 +168,45 @@ export class RslApp extends LitElement {
         grid-template-columns: var(--rail) minmax(0, 1fr) var(--dock);
         grid-template-rows: minmax(0, 1fr);
         min-height: 0;
+      }
+
+      .share-bar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        padding: 7px 12px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(125, 255, 155, 0.06);
+        font-size: 11.5px;
+        color: var(--ink);
+      }
+
+      .share-bar.bad {
+        background: rgba(255, 180, 84, 0.08);
+        color: var(--amber);
+      }
+
+      .share-bar .msg {
+        font-weight: 500;
+      }
+
+      .share-bar .note {
+        color: var(--ink-dim);
+        font-size: 10.5px;
+        flex-basis: 100%;
+      }
+
+      .share-bar.bad .note {
+        color: var(--amber);
+      }
+
+      .share-url {
+        flex: 1 1 260px;
+        min-width: 0;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        padding: 3px 6px;
       }
 
       [hidden] {
@@ -249,6 +311,9 @@ export class RslApp extends LitElement {
       because every render replaces them. */
   @state() private notices: string[] = [];
   @state() private shaderNotice: { ok: boolean; text: string } | undefined = undefined;
+  @state() private shareResult:
+    | { ok: boolean; text: string; url?: string; notes: string[]; showUrl: boolean }
+    | undefined = undefined;
   @state() private benchmarkResults: BenchmarkResult[] = [];
   @state() private benchmarkRunning = false;
   @state() private benchmarkProgress = 0;
@@ -277,20 +342,39 @@ export class RslApp extends LitElement {
       this.scheduleRender();
     });
     window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('hashchange', this.onHashChange);
     await this.library.load();
+    // after the library, so a shared link's custom shaders can be added and compiled
+    const shared = await this.applySharedLink();
     this.ready = true;
     // Passes restored from localStorage (or the defaults) may predate the shader
     // metadata, so fill in every declared parameter with its NextUI default.
     this.syncPassParams();
     void this.refreshPanes();
     this.rebuildSource();
+    // Boot housekeeping above writes state for reasons the user did not ask for, so
+    // persistence only resumes once it has settled — otherwise merely opening a shared
+    // link would overwrite the recipient's saved session.
+    if (shared) requestAnimationFrame(() => store.resumeSaving());
   }
 
   override disconnectedCallback(): void {
     this.unsubscribe?.();
     window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('hashchange', this.onHashChange);
     super.disconnectedCallback();
   }
+
+  /**
+   * Pasting a share link into an already-open tab only changes the fragment, which is a
+   * same-document navigation: nothing reloads, so without this the link would appear to
+   * do nothing at all.
+   */
+  private readonly onHashChange = (): void => {
+    void this.applySharedLink().then((applied) => {
+      if (applied) requestAnimationFrame(() => store.resumeSaving());
+    });
+  };
 
   /** `[` and `]` toggle the side panels, unless the user is typing. */
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -567,6 +651,144 @@ export class RslApp extends LitElement {
     void this.runPaneBenchmark();
   }
 
+  /**
+   * Builds a shareable URL and copies it.
+   *
+   * A stock preset the user has not touched travels as a bare reference, so the ordinary
+   * link stays a few hundred characters; anything else embeds its cfg, and any custom
+   * shader the pipeline uses is embedded with it.
+   */
+  private async onShare(): Promise<void> {
+    const state = this.appState;
+    try {
+      const pristineStockCfg = await this.pristineStockCfg();
+      const selected = state.selectedPreset;
+      const result = await encodeShareUrl(
+        {
+          state,
+          paramsByShader: this.paramsByShader,
+          customShader: (name) => {
+            const entry = this.library.get(name);
+            return entry?.custom ? entry.source : undefined;
+          },
+          pristineStockCfg,
+          userPresetName:
+            selected?.kind === 'user' ? this.userPresets.get(selected.id)?.name : undefined
+        },
+        window.location.href
+      );
+
+      const notes: string[] = [];
+      let copied = true;
+      try {
+        await navigator.clipboard.writeText(result.url);
+      } catch {
+        // clipboard needs a secure context and permission; show the URL instead of failing
+        copied = false;
+      }
+      if (result.warning) notes.push(result.warning);
+      if (state.uploadedName) {
+        notes.push(
+          `Your uploaded image "${state.uploadedName}" is not included — a link cannot carry it, so the recipient sees the selected sample instead.`
+        );
+      }
+
+      this.shareResult = {
+        ok: true,
+        url: result.url,
+        text: copied
+          ? `Link copied — ${result.length.toLocaleString()} characters.`
+          : `Could not reach the clipboard, so here is the link (${result.length.toLocaleString()} characters):`,
+        notes,
+        showUrl: !copied
+      };
+    } catch (error) {
+      this.shareResult = {
+        ok: false,
+        text: error instanceof Error ? error.message : String(error),
+        notes: [],
+        showUrl: false
+      };
+    }
+  }
+
+  /** The selected stock preset's cfg, normalised, or undefined if it has been edited. */
+  private async pristineStockCfg(): Promise<string | undefined> {
+    const selected = this.appState.selectedPreset;
+    if (selected?.kind !== 'stock') return undefined;
+    try {
+      return normaliseCfg(await loadPreset(selected.id), this.paramsByShader);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Applies a shared link, if the fragment carries one.
+   *
+   * Shaders arrive before the pipeline that references them, and are matched by content:
+   * a shader already here under the same name with the same source is reused, while one
+   * that merely shares a name is stored under a free name and the pass references are
+   * rewritten — otherwise the link would silently render with the recipient's unrelated
+   * shader of that name.
+   */
+  private async applySharedLink(): Promise<boolean> {
+    const encoded = readShareFragment(window.location.hash);
+    if (!encoded) return false;
+
+    try {
+      const shared = await decodeShare(encoded);
+      // before any import: onCfgImport goes through the ordinary update path, which would
+      // otherwise persist over the recipient's own session
+      store.holdSaving();
+      const renames = new Map<string, string>();
+
+      for (const shader of shared.shaders) {
+        const existing = this.library.get(shader.name);
+        if (existing?.source === shader.source) continue;
+        const entry = this.library.addFromText(shader.name, shader.source);
+        if (entry.name !== shader.name) renames.set(shader.name, entry.name);
+      }
+
+      if (shared.cfg) {
+        const cfg = [...renames].reduce(
+          (text, [from, to]) => text.split(`= ${from}`).join(`= ${to}`),
+          shared.cfg
+        );
+        this.onCfgImport(cfg);
+      } else if (shared.stockPreset) {
+        this.onCfgImport(await loadPreset(shared.stockPreset));
+      }
+
+      // scaling and core aspect ride outside the cfg, so apply them onto the pipeline
+      const pipelinePatch: Partial<PipelineConfig> = {};
+      if (shared.scaling) pipelinePatch.scaling = shared.scaling as PipelineConfig['scaling'];
+      if (shared.coreAspect !== undefined) pipelinePatch.coreAspect = shared.coreAspect;
+      if (Object.keys(pipelinePatch).length > 0) store.updatePipeline(pipelinePatch);
+
+      const patch: Partial<AppState> = { ...shared.patch };
+      if (shared.stockPreset) patch.selectedPreset = { kind: 'stock', id: shared.stockPreset };
+      // the shared state is applied but not saved: see Store.applyShared
+      store.applyShared(patch);
+      this.appState = store.value;
+
+      const named = shared.presetName ? ` of “${shared.presetName}”` : '';
+      const remapped =
+        renames.size > 0
+          ? ` Custom shaders renamed to avoid clashing with yours: ${[...renames.values()].join(', ')}.`
+          : '';
+      this.notices = [
+        `Showing a shared setup${named}. Your own session is untouched until you change something.${remapped}`
+      ];
+      return true;
+    } catch (error) {
+      this.notices = [
+        `That shared link could not be opened: ${error instanceof Error ? error.message : String(error)}`
+      ];
+      return false;
+    }
+  }
+
   private async onPresetLoad(selection: { kind: string; id: string }): Promise<void> {
     try {
       if (selection.kind === 'user') {
@@ -775,6 +997,17 @@ export class RslApp extends LitElement {
         <span class="chip">${this.shaderNames.length} shaders</span>
         <button
           class="ghost"
+          ?disabled=${!canShare()}
+          aria-label="Share this setup as a link"
+          title=${canShare()
+            ? 'Copy a link that reproduces this setup'
+            : 'This browser cannot compress a link (CompressionStream is missing)'}
+          @click=${() => void this.onShare()}
+        >
+          ⇗<span class="btn-label">Share</span>
+        </button>
+        <button
+          class="ghost"
           aria-label="Reset the lab"
           title="Reset the lab to its defaults"
           @click=${this.resetAll}
@@ -785,6 +1018,32 @@ export class RslApp extends LitElement {
           ${hasErrors ? `${this.issues.length} compile error(s)` : 'signal ok'}
         </span>
       </header>
+
+      ${this.shareResult
+        ? html`
+            <div class="share-bar ${this.shareResult.ok ? '' : 'bad'}" role="status">
+              <span class="msg">${this.shareResult.ok ? '⇗' : '⚠'} ${this.shareResult.text}</span>
+              ${this.shareResult.showUrl && this.shareResult.url
+                ? html`<input
+                    class="share-url"
+                    readonly
+                    .value=${this.shareResult.url}
+                    aria-label="Shareable link"
+                    @focus=${(e: Event) => (e.target as HTMLInputElement).select()}
+                  />`
+                : nothing}
+              ${this.shareResult.notes.map((note) => html`<span class="note">${note}</span>`)}
+              <span class="spacer"></span>
+              <button
+                class="ghost"
+                aria-label="Dismiss"
+                @click=${() => (this.shareResult = undefined)}
+              >
+                ✕
+              </button>
+            </div>
+          `
+        : nothing}
 
       <main
         style=${`grid-template-columns:${state.showRail ? 'var(--rail)' : '0'} minmax(0, 1fr) ${
