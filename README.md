@@ -91,7 +91,14 @@ you are editing; the others show the raw source (the default) or any stock prese
 | **Side by side** | Fixed equal columns, each showing the *same* region of the scene; dragging pans them all together |
 
 While comparing, **Export PNG 1:1** writes the comparison exactly as laid out, at the output
-resolution; **Pane A** exports just the edited pipeline.
+resolution; **Current** exports just the edited pipeline.
+
+**Benchmark** measures the real GPU cost of each pane with timer queries — not CPU time, which
+would measure almost nothing — and reports mean, deviation and range over 30 runs after warmup,
+with a performance percentage relative to the current pipeline. Renders are batched per query and
+the panes are measured in interleaved rounds, otherwise the GPU clock drifts enough to rank a cheap
+shader above an expensive one. The figures rank pipelines against each other on your GPU; they are
+not a prediction of handheld performance.
 
 ### Presets
 

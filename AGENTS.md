@@ -113,6 +113,10 @@ Useful events: `preset-load|save|rename|update|delete`, `cfg-import`, `pass-add|
 - Console should contain **only** Lit's dev-mode notice. Anything else is a regression.
 - Chrome will not resize below ~500px wide; `resize_page` clamps silently.
 - To sanity-check rendering, `gl.readPixels` on `app.main.gl`, or compare pane pixels.
+- Benchmarking uses `EXT_disjoint_timer_query_webgl2`. Two things are load-bearing and were found
+  the hard way: renders are **batched inside one query** and panes are measured in **interleaved
+  rounds**. Sampling one render at a time left the GPU idle between samples, its clock dropped, and
+  the spread hit ±45% — enough to rank an expensive shader above a cheap one.
 
 ## Gotchas that actually bite
 
