@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, query, queryAll, state } from 'lit/decorators.js';
 import { panelStyles } from './shared-styles.js';
-import { paneLabel } from '../core/preset-config.js';
+import { paneLabel, paneRef } from '../core/preset-config.js';
 import type { Rect } from '../core/types.js';
 import type { CompareMode, ComparePane } from '../core/state.js';
 
@@ -294,6 +294,8 @@ export class RslViewport extends LitElement {
   /** Pane labels resolved by the app, which knows the saved preset names. */
   @property({ attribute: false }) labels: string[] = [];
   @property({ attribute: false }) presets: string[] = [];
+  /** The user's own presets, selectable for a comparison pane alongside the stock ones. */
+  @property({ attribute: false }) userPresets: { id: string; name: string }[] = [];
   @property({ attribute: false }) dstRect: Rect | undefined = undefined;
   @property({ type: Number }) renderMs = 0;
   /** False when the GPU timer extension is missing, so benchmarking is impossible. */
@@ -726,13 +728,31 @@ export class RslViewport extends LitElement {
             })}
         >
           <option value="" ?selected=${!pane?.preset}>Raw (no shader)</option>
-          ${this.presets.map(
-            (path) => html`
-              <option value=${path} ?selected=${path === pane?.preset}>
-                ${path.replace(/\.cfg$/, '')}
-              </option>
-            `
-          )}
+          ${this.userPresets.length > 0
+            ? html`
+                <optgroup label="Your presets">
+                  ${this.userPresets.map(
+                    (preset) => html`
+                      <option
+                        value=${paneRef('user', preset.id)}
+                        ?selected=${paneRef('user', preset.id) === pane?.preset}
+                      >
+                        ${preset.name}
+                      </option>
+                    `
+                  )}
+                </optgroup>
+              `
+            : nothing}
+          <optgroup label="NextUI presets">
+            ${this.presets.map(
+              (path) => html`
+                <option value=${path} ?selected=${path === pane?.preset}>
+                  ${path.replace(/\.cfg$/, '')}
+                </option>
+              `
+            )}
+          </optgroup>
         </select>
       </div>
     `;
