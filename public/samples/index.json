@@ -30,7 +30,7 @@
     "file": "gbc-pokemon-crystal.png",
     "system": "gbc",
     "platform": "Game Boy Color",
-    "title": "Pokémon Crystal",
+    "title": "Pok\u00e9mon Crystal",
     "width": 160,
     "height": 144,
     "source": "libretro-thumbnails/Nintendo_-_Game_Boy_Color/Named_Snaps/Pokemon - Crystal Version (USA).png"
@@ -108,13 +108,13 @@
     "source": "libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/Named_Snaps/Streets of Rage 2 (USA).png"
   },
   {
-    "file": "ps1-metal-gear-solid.png",
+    "file": "ps1-gran-turismo.png",
     "system": "ps1",
     "platform": "PlayStation",
-    "title": "Metal Gear Solid",
+    "title": "Gran Turismo",
     "width": 320,
     "height": 240,
-    "source": "libretro-thumbnails/Sony_-_PlayStation/Named_Snaps/Metal Gear Solid (USA) (Disc 1).png"
+    "source": "libretro-thumbnails/Sony_-_PlayStation/Named_Snaps/Gran Turismo (USA).png"
   },
   {
     "file": "ps1-resident-evil-2.png",
