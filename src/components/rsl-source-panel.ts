@@ -22,6 +22,7 @@ export class RslSourcePanel extends LitElement {
         display: flex;
         gap: 10px;
         align-items: center;
+        min-width: 0;
       }
 
       .thumb {
@@ -54,6 +55,7 @@ export class RslSourcePanel extends LitElement {
         flex-direction: column;
         gap: 5px;
         min-width: 0;
+        flex: 1 1 auto;
       }
 
       .drop {
@@ -185,6 +187,37 @@ export class RslSourcePanel extends LitElement {
           </span>
         </div>
         <div class="module-body" ?hidden=${this.collapsed['source']}>
+          ${this.samples.length > 0
+            ? html`
+                <div>
+                  <label for="sample">Game screenshots</label>
+                  <select
+                    id="sample"
+                    name="sample"
+                    @change=${(e: Event) =>
+                      this.emit('source-sample', (e.target as HTMLSelectElement).value)}
+                  >
+                    <option value="" ?selected=${!this.sampleFile}>— generated pattern —</option>
+                    ${this.samplesByPlatform.map(
+                      ([platform, entries]) => html`
+                        <optgroup label=${platform}>
+                          ${entries.map(
+                            (entry) => html`
+                              <option value=${entry.file} ?selected=${entry.file === this.sampleFile}>
+                                ${entry.title}${entry.width
+                                  ? ` · ${entry.width}×${entry.height}`
+                                  : ''}
+                              </option>
+                            `
+                          )}
+                        </optgroup>
+                      `
+                    )}
+                  </select>
+                </div>
+              `
+            : nothing}
+
           <div class="preview">
             <div class="thumb">${this.renderThumb()}</div>
             <div class="meta">
@@ -238,36 +271,6 @@ export class RslSourcePanel extends LitElement {
             ${this.uploadedName ? `▣ ${this.uploadedName}` : 'Drop a screenshot · or click to browse'}
           </div>
 
-          ${this.samples.length > 0
-            ? html`
-                <div>
-                  <label for="sample">Game screenshots</label>
-                  <select
-                    id="sample"
-                    name="sample"
-                    @change=${(e: Event) =>
-                      this.emit('source-sample', (e.target as HTMLSelectElement).value)}
-                  >
-                    <option value="" ?selected=${!this.sampleFile}>— generated pattern —</option>
-                    ${this.samplesByPlatform.map(
-                      ([platform, entries]) => html`
-                        <optgroup label=${platform}>
-                          ${entries.map(
-                            (entry) => html`
-                              <option value=${entry.file} ?selected=${entry.file === this.sampleFile}>
-                                ${entry.title}${entry.width
-                                  ? ` · ${entry.width}×${entry.height}`
-                                  : ''}
-                              </option>
-                            `
-                          )}
-                        </optgroup>
-                      `
-                    )}
-                  </select>
-                </div>
-              `
-            : nothing}
         </div>
       </section>
 
