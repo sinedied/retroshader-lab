@@ -240,6 +240,20 @@ export class RslViewport extends LitElement {
     return this.compareMode === 'off' ? 1 : this.paneCount;
   }
 
+  /** Evenly spaced dividers, the same spacing the store uses when the pane count changes. */
+  private get evenDividers(): number[] {
+    const panes = this.visiblePanes;
+    return Array.from({ length: panes - 1 }, (_, i) => (i + 1) / panes);
+  }
+
+  private get dividersAreEven(): boolean {
+    const even = this.evenDividers;
+    return (
+      this.dividers.length === even.length &&
+      even.every((position, i) => Math.abs(position - this.dividers[i]) < 0.001)
+    );
+  }
+
   private get scale(): number {
     return this.viewMode === 'fit' ? this.fitScale : this.zoom;
   }
@@ -550,6 +564,19 @@ export class RslViewport extends LitElement {
         </div>
         ${this.renderPanePicker(0)} ${this.paneCount === 3 ? this.renderPanePicker(1) : nothing}
         <span class="spacer"></span>
+        ${this.compareMode === 'overlay'
+          ? html`
+              <button
+                class="ghost"
+                ?disabled=${this.dividersAreEven}
+                aria-label="Reset the dividers"
+                title="Reset the dividers to evenly spaced"
+                @click=${() => this.emit('view-change', { dividers: this.evenDividers })}
+              >
+                ↺<span class="btn-label">Dividers</span>
+              </button>
+            `
+          : nothing}
         <button
           class="ghost"
           aria-label="Close comparison"
