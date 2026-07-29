@@ -11,18 +11,30 @@ export interface SystemResolution {
   label: string;
   width: number;
   height: number;
+  /**
+   * Display aspect ratio the libretro core reports, which is not the pixel ratio for
+   * the systems that stretch to 4:3.
+   */
+  aspect: number;
 }
 
 export const SYSTEM_RESOLUTIONS: SystemResolution[] = [
-  { id: 'gb', label: 'Game Boy', width: 160, height: 144 },
-  { id: 'gbc', label: 'Game Boy Color', width: 160, height: 144 },
-  { id: 'gba', label: 'Game Boy Advance', width: 240, height: 160 },
-  { id: 'nes', label: 'NES / Famicom', width: 256, height: 240 },
-  { id: 'snes', label: 'SNES / Super Famicom', width: 256, height: 224 },
-  { id: 'md', label: 'Mega Drive / Genesis', width: 320, height: 224 },
-  { id: 'ps1', label: 'PlayStation', width: 320, height: 240 },
-  { id: 'psp', label: 'PSP', width: 480, height: 272 }
+  // square-pixel handhelds report their native ratio
+  { id: 'gb', label: 'Game Boy', width: 160, height: 144, aspect: 10 / 9 },
+  { id: 'gbc', label: 'Game Boy Color', width: 160, height: 144, aspect: 10 / 9 },
+  { id: 'gba', label: 'Game Boy Advance', width: 240, height: 160, aspect: 3 / 2 },
+  // consoles stretch non-square pixels to 4:3 on a TV
+  { id: 'nes', label: 'NES / Famicom', width: 256, height: 240, aspect: 4 / 3 },
+  { id: 'snes', label: 'SNES / Super Famicom', width: 256, height: 224, aspect: 4 / 3 },
+  { id: 'md', label: 'Mega Drive / Genesis', width: 320, height: 224, aspect: 4 / 3 },
+  { id: 'ps1', label: 'PlayStation', width: 320, height: 240, aspect: 4 / 3 },
+  { id: 'psp', label: 'PSP', width: 480, height: 272, aspect: 480 / 272 }
 ];
+
+/** Display aspect of a system, falling back to 4:3 for anything unknown. */
+export function aspectOfSystem(id: string): number {
+  return SYSTEM_RESOLUTIONS.find((system) => system.id === id)?.aspect ?? 4 / 3;
+}
 
 export type PatternKind = 'grid' | 'colorbars' | 'gradient';
 

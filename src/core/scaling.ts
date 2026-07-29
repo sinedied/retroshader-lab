@@ -102,6 +102,7 @@ export const CORE_ASPECTS: { label: string; value: number }[] = [
   { label: '4:3 (1.333)', value: 4 / 3 },
   { label: '10:9 (1.111) — GB / GBC', value: 10 / 9 },
   { label: '3:2 (1.500) — GBA', value: 3 / 2 },
+  { label: '30:17 (1.765) — PSP', value: 480 / 272 },
   { label: '16:9 (1.778)', value: 16 / 9 },
   { label: '1:1 (1.000)', value: 1 }
 ];

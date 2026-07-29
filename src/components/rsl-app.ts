@@ -27,6 +27,7 @@ import { defaultValue, isConfigurable, quantize } from '../core/pragma-params.js
 import { store, defaultPass, type AppState } from '../core/state.js';
 import {
   SYSTEM_RESOLUTIONS,
+  aspectOfSystem,
   loadImageSource,
   makeGeneratedSource,
   type PatternKind
@@ -623,6 +624,8 @@ export class RslApp extends LitElement {
             @toggle-panel=${(e: CustomEvent<string>) => store.toggleCollapsed(e.detail)}
             @source-system=${(e: CustomEvent<string>) => {
               store.update({ sourceSystem: e.detail, sampleFile: undefined, uploadedName: undefined });
+              // the core aspect follows the system, like the libretro core reporting it
+              store.updatePipeline({ coreAspect: aspectOfSystem(e.detail) });
               this.rebuildSource();
             }}
             @source-pattern=${(e: CustomEvent<PatternKind>) => {
@@ -642,6 +645,9 @@ export class RslApp extends LitElement {
                 // pattern stays on the same platform
                 ...(sample?.system ? { sourceSystem: sample.system } : {})
               });
+              if (sample?.system) {
+                store.updatePipeline({ coreAspect: aspectOfSystem(sample.system) });
+              }
               this.rebuildSource();
             }}
             @source-file=${(e: CustomEvent<File>) => this.onSourceFile(e.detail)}
