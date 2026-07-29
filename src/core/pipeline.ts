@@ -84,8 +84,15 @@ export interface RenderResult {
   warnings: string[];
 }
 
+/** `EXT_disjoint_timer_query_webgl2`, the only way to get real GPU timings. */
+interface TimerExtension {
+  TIME_ELAPSED_EXT: number;
+  GPU_DISJOINT_EXT: number;
+}
+
 export class ShaderPipeline {
   readonly gl: WebGL2RenderingContext;
+  private readonly timer: TimerExtension | undefined;
   private origW = 1;
   private origH = 1;
   private maxTextureSize = 2048;
@@ -119,6 +126,60 @@ export class ShaderPipeline {
     gl.bindVertexArray(null);
     this.fbo = gl.createFramebuffer() ?? undefined;
     this.maxTextureSize = (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) || 2048;
+    this.timer =
+      (gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExtension | null) ?? undefined;
+  }
+
+  /** Whether this context can report GPU time at all. */
+  get canTime(): boolean {
+    return this.timer !== undefined;
+  }
+
+  /**
+   * Renders `iterations` times inside one timer query and resolves with the GPU
+   * milliseconds **per render**.
+   *
+   * Wrapping `render()` in `performance.now()` would measure the CPU time spent queueing
+   * commands, which is close to nothing and unrelated to how expensive a shader is. A
+   * timer query instead reports what the GPU actually spent.
+   *
+   * Batching matters as much as the query itself: waiting for a single render's result
+   * leaves the GPU idle long enough for its clock to drop, which showed up as a ±45%
+   * spread and even ranked an expensive shader above a cheap one. Keeping it busy for a
+   * batch also amortises the fixed query overhead.
+   *
+   * Resolves `undefined` when the driver flags a disjoint — a context switch or power
+   * event that invalidates every sample it covers — or when the result never arrives.
+   */
+  async timedRender(
+    options: Parameters<ShaderPipeline['render']>[0],
+    iterations = 1
+  ): Promise<number | undefined> {
+    const gl = this.gl;
+    const timer = this.timer;
+    if (!timer) return undefined;
+
+    const query = gl.createQuery();
+    if (!query) return undefined;
+
+    const runs = Math.max(1, iterations);
+    gl.beginQuery(timer.TIME_ELAPSED_EXT, query);
+    for (let i = 0; i < runs; i++) this.render(options);
+    gl.endQuery(timer.TIME_ELAPSED_EXT);
+
+    // the result lands a few frames later, so poll instead of stalling the GPU with finish()
+    for (let attempt = 0; attempt < 240; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      if (gl.getParameter(timer.GPU_DISJOINT_EXT)) break;
+      if (gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) {
+        const nanoseconds = gl.getQueryParameter(query, gl.QUERY_RESULT) as number;
+        gl.deleteQuery(query);
+        return nanoseconds / 1e6 / runs;
+      }
+    }
+
+    gl.deleteQuery(query);
+    return undefined;
   }
 
   /** Compiles a shader file the way NextUI does, caching the result per file name. */
