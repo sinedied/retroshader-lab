@@ -36,13 +36,17 @@ export class RslViewport extends LitElement {
         min-width: 0;
         min-height: 0;
         height: 100%;
+        /* if wrapping toolbars ever need more room than the row has, scroll
+           rather than squeezing the stage away */
+        overflow-y: auto;
       }
 
       .bar {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 7px 10px;
+        gap: 6px;
+        padding: 7px 9px;
+        min-width: 0;
         border-bottom: 1px solid var(--line);
         background: linear-gradient(180deg, var(--panel-2), var(--panel));
         flex: 0 0 auto;
@@ -104,8 +108,9 @@ export class RslViewport extends LitElement {
 
       .stage {
         position: relative;
-        flex: 1;
-        min-height: 0;
+        flex: 1 1 auto;
+        /* never let the preview be squeezed to nothing by wrapping toolbars */
+        min-height: 180px;
         overflow: hidden;
         background-color: #020403;
         background-image: linear-gradient(45deg, #0a0f0d 25%, transparent 25%),
@@ -514,17 +519,19 @@ export class RslViewport extends LitElement {
         <div class="seg">
           <button
             aria-pressed=${this.compareMode === 'overlay'}
+            aria-label="Overlay comparison"
             title="Panes clipped by a movable divider, forming one image"
             @click=${() => this.emit('compare-change', { compareMode: 'overlay' })}
           >
-            ◧ Overlay
+            ◧<span class="btn-label">Overlay</span>
           </button>
           <button
             aria-pressed=${this.compareMode === 'side-by-side'}
+            aria-label="Side by side comparison"
             title="Panes side by side, showing the same region"
             @click=${() => this.emit('compare-change', { compareMode: 'side-by-side' })}
           >
-            ▥ Side by side
+            ▥<span class="btn-label">Side by side</span>
           </button>
         </div>
         <div class="seg">
@@ -543,8 +550,13 @@ export class RslViewport extends LitElement {
         </div>
         ${this.renderPanePicker(0)} ${this.paneCount === 3 ? this.renderPanePicker(1) : nothing}
         <span class="spacer"></span>
-        <button class="ghost" @click=${() => this.emit('compare-change', { compareMode: 'off' })}>
-          ✕ Close
+        <button
+          class="ghost"
+          aria-label="Close comparison"
+          title="Close comparison"
+          @click=${() => this.emit('compare-change', { compareMode: 'off' })}
+        >
+          ✕<span class="btn-label">Close</span>
         </button>
       </div>
     `;
@@ -601,23 +613,33 @@ export class RslViewport extends LitElement {
           class="ghost"
           aria-pressed=${comparing}
           title="Compare the edited pipeline with presets or the raw source"
+          aria-label="Compare pipelines"
           @click=${() =>
             this.emit('compare-change', { compareMode: comparing ? 'off' : 'overlay' })}
         >
-          ${comparing ? '◧' : '◨'} Compare
+          ⇄<span class="btn-label">Compare</span>
         </button>
 
         <span class="spacer"></span>
 
         ${comparing
           ? html`
-              <button @click=${() => this.emit('export-png', { composite: false })}>
-                ⇩ Pane A
+              <button
+                aria-label="Export pane A as PNG"
+                title="Export only the edited pipeline"
+                @click=${() => this.emit('export-png', { composite: false })}
+              >
+                ⇩A<span class="btn-label">Pane A</span>
               </button>
             `
           : nothing}
-        <button class="primary" @click=${() => this.emit('export-png', { composite: comparing })}>
-          ⇩ Export PNG 1:1
+        <button
+          class="primary"
+          aria-label="Export PNG at 1:1"
+          title="Export a 1:1 PNG"
+          @click=${() => this.emit('export-png', { composite: comparing })}
+        >
+          ⇩<span class="btn-label">Export PNG 1:1</span>
         </button>
       </div>
 

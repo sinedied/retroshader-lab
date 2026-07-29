@@ -160,7 +160,26 @@ export const panelStyles = css`
     border-radius: 2px;
     padding: 6px 9px;
     cursor: pointer;
+    /* never break a label mid-word: toolbars wrap between buttons instead */
+    white-space: nowrap;
     transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+
+  /* Narrow screens: keep only the leading icon, the accessible name lives on
+     aria-label/title so the control stays identifiable. */
+  .btn-label {
+    margin-left: 4px;
+  }
+
+  @media (max-width: 700px) {
+    .btn-label {
+      display: none;
+    }
+
+    button {
+      padding: 6px 7px;
+      letter-spacing: 0.08em;
+    }
   }
 
   button:hover {

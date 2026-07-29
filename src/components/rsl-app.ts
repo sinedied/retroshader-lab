@@ -70,14 +70,6 @@ export class RslApp extends LitElement {
         min-width: 0;
       }
 
-      .logo .sub {
-        font-size: 10px;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        color: var(--ink-faint);
-        font-family: var(--font-display);
-        font-variation-settings: 'wdth' 108, 'wght' 500;
-      }
 
       .logo .mark {
         font-family: var(--font-display);
@@ -496,28 +488,34 @@ export class RslApp extends LitElement {
       <header class="masthead boot" style="animation-delay:0ms">
         <div class="logo">
           <span class="mark">Retro<em>Shader</em> Lab</span>
-          <span class="sub">NextUI · shader pipeline bench</span>
         </div>
         <span class="spacer"></span>
         <div class="seg">
           <button
             aria-pressed=${state.showRail}
-              title="Toggle the left panel  ( [ )"
+              aria-label="Toggle the left panel"
+            title="Toggle the left panel  ( [ )"
             @click=${() => store.update({ showRail: !state.showRail })}
           >
-            ▤ Panels
+            ◧<span class="btn-label">Panels</span>
           </button>
           <button
             aria-pressed=${state.showDock}
-              title="Toggle the right panel  ( ] )"
+              aria-label="Toggle the right panel"
+            title="Toggle the right panel  ( ] )"
             @click=${() => store.update({ showDock: !state.showDock })}
           >
-            ▤ CFG
+            ◨<span class="btn-label">CFG</span>
           </button>
         </div>
         <span class="chip">${this.shaderNames.length} shaders</span>
-        <button class="ghost" title="Reset the lab to its defaults" @click=${this.resetAll}>
-          ↺ Reset
+        <button
+          class="ghost"
+          aria-label="Reset the lab"
+          title="Reset the lab to its defaults"
+          @click=${this.resetAll}
+        >
+          ↺<span class="btn-label">Reset</span>
         </button>
         <span class="led ${hasErrors ? 'error' : ''}">
           ${hasErrors ? `${this.issues.length} compile error(s)` : 'signal ok'}
