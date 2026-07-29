@@ -61,6 +61,6 @@ export async function panePipelineConfig(
 
 /** Short label for a pane, shown over the render. */
 export function paneLabel(preset: string | undefined): string {
-  if (!preset) return 'RAW';
+  if (!preset) return 'Raw';
   return (preset.split('/').pop() ?? preset).replace(/\.cfg$/, '');
 }

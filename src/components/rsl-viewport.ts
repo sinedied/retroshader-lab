@@ -376,7 +376,7 @@ export class RslViewport extends LitElement {
 
   /** Label shown over a pane: pane 0 is always the pipeline being edited. */
   private labelFor(index: number): string {
-    if (index === 0) return 'CURRENT';
+    if (index === 0) return 'Current';
     return paneLabel(this.panes[index - 1]?.preset);
   }
 
