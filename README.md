@@ -47,6 +47,7 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 - **Pass inspector** showing every intermediate render with its computed `InputSize` / `TextureSize` / `OutputSize`
 - **Live `.cfg`** you can edit, download, or load back — unknown keys (core options like `gambatte_*`) are preserved
 - **GLSL error panel** with the fully preprocessed source, line-numbered
+- **Share as a link** — the whole setup in a URL fragment; an unedited stock preset costs ~150 characters
 - Everything is persisted to `localStorage`
 
 ## Quick start
@@ -177,6 +178,33 @@ otherwise change what every stock preset renders; collisions get a `-2` suffix i
 > without a server to proxy through, so for anything else download the file and add it from disk.
 
 To ship a shader with the project instead, drop it in `public/shaders/glsl/` and re-run `npm run dev`.
+
+### Sharing a setup
+
+**Share** copies a link that reproduces what you are looking at: the pipeline and its parameters,
+the comparison and its frame, the source, zoom and pan, and which panels are open.
+
+The whole thing rides in the URL fragment, compressed. That keeps it off the server entirely — no
+request carries it, so nothing can reject or log it — and how much it costs depends on what you are
+sharing:
+
+| Sharing | Link size |
+| --- | --- |
+| A stock preset you have not edited | **~150 characters** — it travels as a reference, not a copy |
+| An edited preset, or one of your own | **~250–450** — the cfg is embedded |
+| A pipeline using one of your own shaders | **~9,500** — the GLSL is embedded too |
+
+Over 8,000 characters you get a warning, since some chat and mail clients truncate long links. Over
+16,000 it refuses and tells you which shaders are responsible and what each costs, rather than
+handing you a link that silently breaks.
+
+> [!NOTE]
+> Opening someone's link does **not** touch your own saved session — it is applied for viewing only,
+> and becomes yours the moment you change something. An uploaded screenshot cannot travel in a link,
+> so the recipient sees the selected sample instead; you are told when that applies.
+
+If a shared shader has the same name as one of yours but different contents, yours is kept and the
+incoming one is renamed, with the pipeline repointed at it.
 
 ## How it works
 

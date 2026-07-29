@@ -123,7 +123,7 @@ Ported in `src/core/pipeline.ts` + `glsl-preprocess.ts` + `scaling.ts`. These ar
 
 - `src/core/` — pure logic, no DOM beyond canvas: `pipeline` (render graph), `glsl-preprocess`,
   `pragma-params`, `scaling`, `cfg` (minarch reader/writer), `preset-config`, `user-presets`,
-  `shader-library`, `test-patterns`, `state` (store singleton + localStorage).
+  `shader-library`, `test-patterns`, `share` (URL state), `state` (store singleton + localStorage).
 - `src/components/` — Lit elements, all `rsl-*`: `app` (owns pipelines and orchestration),
   `viewport` (canvases, zoom/pan, comparison frame, export), `source-panel`, `pipeline-panel`,
   `dock` (cfg / passes / shaders / log tabs), `benchmark`, `shared-styles`.
@@ -152,6 +152,36 @@ While comparing, the panes divide a rectangle measured in **export pixels** (`co
   skips a pass whose shader is not cached — an invalid shader would look like an empty pass.
 - Shader URLs are a plain `fetch` and so bound by CORS; it cannot be proxied without a server. Say
   so in the error rather than reporting a generic failure.
+
+### Sharing state in a URL
+
+`src/core/share.ts`. The payload is a deflate-raw + base64url blob in the **fragment**.
+
+- **Fragment, never the query string.** A fragment is not sent to the server, so a static host
+  cannot 414 it and it stays out of logs. Moving it to `?` would cap the length at whatever the host
+  allows.
+- **Only the delta against `defaultState()` is written.** That is what keeps an ordinary link near
+  150 characters, and it makes old links forward-compatible: a field added later is absent and takes
+  its default. A `v` marker guards the shape, so a newer link says so instead of decoding to
+  nonsense.
+- **The pipeline travels as cfg text**, reusing `exportCfg`/`importCfg` rather than a second
+  serialization that could drift from the one the app actually uses.
+- **Screen scaling and core aspect are compared and carried separately** from the preset. They are
+  output settings the user owns and most presets never mention them; folding them into the
+  "is this preset untouched?" comparison made 4 of 5 stock presets embed their whole cfg for no
+  reason. Use `exportCfg({ includeScreenScaling: false })` on both sides.
+- **`normaliseCfg` must resolve parameters the way loading a preset does** (`resolveParams`), since
+  `importCfg` returns them in a side table rather than on the passes. Skipping that makes every
+  preset look edited.
+- **`store.holdSaving()` has to be taken before the cfg import**, not after: the import goes through
+  the ordinary update path and would otherwise persist over the recipient's own session. Verify this
+  by checking localStorage, and make sure the link actually applied first — an assertion that a
+  session survived is vacuous if nothing was ever applied.
+- **A fragment-only change is a same-document navigation.** Pasting a link into an open tab fires
+  `hashchange` and nothing else, so without that listener the link appears to do nothing. The same
+  trap makes `Page.navigate` to a `#…` URL a no-op when testing.
+- Incoming custom shaders are matched **by content**: identical is reused, same-name-different-source
+  is renamed *and the pass references remapped*.
 
 ## Verifying in the browser
 
