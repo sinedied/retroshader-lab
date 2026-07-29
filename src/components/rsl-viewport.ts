@@ -411,8 +411,26 @@ export class RslViewport extends LitElement {
   override updated(changed: Map<string, unknown>): void {
     // Deferred: recomputing the fit scale writes reactive state, which Lit rejects
     // from inside an update cycle.
-    if (changed.has('width') || changed.has('height')) {
-      requestAnimationFrame(() => this.updateFitScale());
+    const geometryChanged =
+      changed.has('width') ||
+      changed.has('height') ||
+      changed.has('compareWidth') ||
+      changed.has('compareHeight') ||
+      changed.has('compareMode') ||
+      changed.has('paneCount');
+
+    if (geometryChanged) {
+      requestAnimationFrame(() => {
+        this.updateFitScale();
+        // Anything that resizes the window a pane shows can leave an existing pan out of
+        // range — dragging to the edge of a narrow frame and then widening it used to
+        // leave the render short of its column, as a black gap on screen and in the
+        // export. The clamp only ran on drag and zoom, so nothing re-checked it.
+        const clamped = this.clampPan(this.pan);
+        if (Math.abs(clamped.x - this.pan.x) > 0.01 || Math.abs(clamped.y - this.pan.y) > 0.01) {
+          this.emit('view-change', { pan: clamped });
+        }
+      });
     }
   }
 
