@@ -136,6 +136,13 @@ export class RslApp extends LitElement {
         text-transform: uppercase;
         color: var(--ink-dim);
         font-family: var(--font-display);
+        /* the state is carried by the dot alone when there is nothing to report, so the
+           label has to be reachable some other way */
+        cursor: help;
+      }
+
+      .led:empty {
+        gap: 0;
       }
 
       .led::before {
@@ -994,7 +1001,6 @@ export class RslApp extends LitElement {
             ◨<span class="btn-label">CFG</span>
           </button>
         </div>
-        <span class="chip">${this.shaderNames.length} shaders</span>
         <button
           class="ghost"
           ?disabled=${!canShare()}
@@ -1014,9 +1020,14 @@ export class RslApp extends LitElement {
         >
           ↺<span class="btn-label">Reset</span>
         </button>
-        <span class="led ${hasErrors ? 'error' : ''}">
-          ${hasErrors ? `${this.issues.length} compile error(s)` : 'signal ok'}
-        </span>
+        <span
+          class="led ${hasErrors ? 'error' : ''}"
+          role="status"
+          title=${hasErrors
+            ? `${this.issues.length} shader compile error(s)`
+            : 'All shaders compiled'}
+          >${hasErrors ? `${this.issues.length} compile error(s)` : nothing}</span
+        >
       </header>
 
       ${this.shareResult

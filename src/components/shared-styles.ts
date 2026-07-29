@@ -250,6 +250,19 @@ export const panelStyles = css`
     text-shadow: 0 0 12px rgba(125, 255, 155, 0.6);
   }
 
+  /* A toggle outside a .seg group gets nothing from the rule above, which is how the
+     Labels button ended up looking permanently dead however often it was clicked. */
+  button.toggle[aria-pressed='true'] {
+    background: rgba(125, 255, 155, 0.14);
+    border-color: var(--phosphor-dim);
+    color: var(--phosphor);
+    text-shadow: 0 0 12px rgba(125, 255, 155, 0.6);
+  }
+
+  button.toggle[aria-pressed='false'] {
+    color: var(--ink-dim);
+  }
+
   input[type='range'] {
     appearance: none;
     width: 100%;
