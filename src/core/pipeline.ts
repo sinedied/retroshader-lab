@@ -104,6 +104,7 @@ export class ShaderPipeline {
   private sourceKey = '';
   private readonly targets: (WebGLTexture | undefined)[] = [];
   private readonly targetSizes: { w: number; h: number }[] = [];
+  private readonly pendingRuns = new Map<WebGLQuery, number>();
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', {
@@ -136,25 +137,23 @@ export class ShaderPipeline {
   }
 
   /**
-   * Renders `iterations` times inside one timer query and resolves with the GPU
-   * milliseconds **per render**.
+   * Queues `iterations` renders inside one GPU timer query and returns a handle to it,
+   * without waiting for the result.
    *
    * Wrapping `render()` in `performance.now()` would measure the CPU time spent queueing
    * commands, which is close to nothing and unrelated to how expensive a shader is. A
    * timer query instead reports what the GPU actually spent.
    *
-   * Batching matters as much as the query itself: waiting for a single render's result
-   * leaves the GPU idle long enough for its clock to drop, which showed up as a ±45%
-   * spread and even ranked an expensive shader above a cheap one. Keeping it busy for a
-   * batch also amortises the fixed query overhead.
-   *
-   * Resolves `undefined` when the driver flags a disjoint — a context switch or power
-   * event that invalidates every sample it covers — or when the result never arrives.
+   * Starting and reading are split because *waiting is the enemy of accuracy*. A GPU left
+   * idle drops its clock, so the next sample measures a slower chip; that was once bad
+   * enough to rank an expensive shader above a cheap one. Only one query may be **active**
+   * at a time, but any number may be finished-and-unread, so a caller can keep submitting
+   * batches and harvest them later, leaving the GPU continuously busy.
    */
-  async timedRender(
+  startTimedBatch(
     options: Parameters<ShaderPipeline['render']>[0],
     iterations = 1
-  ): Promise<number | undefined> {
+  ): WebGLQuery | undefined {
     const gl = this.gl;
     const timer = this.timer;
     if (!timer) return undefined;
@@ -163,23 +162,42 @@ export class ShaderPipeline {
     if (!query) return undefined;
 
     const runs = Math.max(1, iterations);
+    this.pendingRuns.set(query, runs);
     gl.beginQuery(timer.TIME_ELAPSED_EXT, query);
     for (let i = 0; i < runs; i++) this.render(options);
     gl.endQuery(timer.TIME_ELAPSED_EXT);
+    // submit now rather than at the end of the task, so the GPU starts on it immediately
+    gl.flush();
+    return query;
+  }
 
-    // the result lands a few frames later, so poll instead of stalling the GPU with finish()
-    for (let attempt = 0; attempt < 240; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, 1));
-      if (gl.getParameter(timer.GPU_DISJOINT_EXT)) break;
-      if (gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) {
-        const nanoseconds = gl.getQueryParameter(query, gl.QUERY_RESULT) as number;
-        gl.deleteQuery(query);
-        return nanoseconds / 1e6 / runs;
-      }
-    }
+  /**
+   * Collects a batch started by `startTimedBatch`, without blocking.
+   *
+   * Returns `'pending'` while the result is still in flight, the GPU milliseconds **per
+   * render** once it lands, or `undefined` when the driver flagged a disjoint — a context
+   * switch or power event that invalidates the sample. Disjoint is only read once a result
+   * is available, because reading the flag also clears it.
+   */
+  readTimedBatch(query: WebGLQuery): number | 'pending' | undefined {
+    const gl = this.gl;
+    const timer = this.timer;
+    const runs = this.pendingRuns.get(query);
+    if (!timer || runs === undefined) return undefined;
 
+    if (!gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) return 'pending';
+
+    const disjoint = gl.getParameter(timer.GPU_DISJOINT_EXT) as boolean;
+    const nanoseconds = gl.getQueryParameter(query, gl.QUERY_RESULT) as number;
     gl.deleteQuery(query);
-    return undefined;
+    this.pendingRuns.delete(query);
+    return disjoint ? undefined : nanoseconds / 1e6 / runs;
+  }
+
+  /** Drops every unread batch, so an abandoned run cannot leak its queries. */
+  cancelTimedBatches(): void {
+    for (const query of this.pendingRuns.keys()) this.gl.deleteQuery(query);
+    this.pendingRuns.clear();
   }
 
   /** Compiles a shader file the way NextUI does, caching the result per file name. */

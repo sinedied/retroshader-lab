@@ -15,7 +15,13 @@ import {
   type RenderResult
 } from '../core/pipeline.js';
 import { panePipelineConfig, paneLabel } from '../core/preset-config.js';
-import { runBenchmark, type BenchmarkResult, type BenchmarkTarget } from '../core/benchmark.js';
+import {
+  runBenchmark,
+  ROUND_PRESETS,
+  type BenchmarkQuality,
+  type BenchmarkResult,
+  type BenchmarkTarget
+} from '../core/benchmark.js';
 import { UserPresetStore } from '../core/user-presets.js';
 import {
   ShaderLibrary,
@@ -241,6 +247,7 @@ export class RslApp extends LitElement {
   @state() private benchmarkResults: BenchmarkResult[] = [];
   @state() private benchmarkRunning = false;
   @state() private benchmarkProgress = 0;
+  @state() private benchmarkQuality: BenchmarkQuality = 'standard';
   private benchmarkCancelled = false;
 
   private readonly library = new ShaderLibrary();
@@ -497,6 +504,12 @@ export class RslApp extends LitElement {
       const pipeline = this.pipelines[index];
       if (!pipeline) return [];
       const label = index === 0 ? 'Current' : paneLabel(state.panes[index - 1]?.preset);
+      // render() silently skips passes whose shader is not cached, which would time a
+      // pane as almost free; compile up front rather than trusting the last frame to have
+      for (const name of new Set([FINAL_SHADER, ...config.passes.map((pass) => pass.shader)])) {
+        const entry = this.library.get(name);
+        if (entry) pipeline.compile(name, entry.source);
+      }
       return [{ label, shaders: config.passes.map((pass) => pass.shader), pipeline, config }];
     });
     if (targets.length === 0) return;
@@ -512,10 +525,17 @@ export class RslApp extends LitElement {
         screenW: state.outputWidth,
         screenH: state.outputHeight,
         finalShaderName: FINAL_SHADER,
+        rounds: ROUND_PRESETS[this.benchmarkQuality],
         onProgress: (done, total) => (this.benchmarkProgress = done / total),
         shouldCancel: () => this.benchmarkCancelled
       });
       if (!this.benchmarkCancelled) this.benchmarkResults = results;
+    } catch (error) {
+      // a failed run must say so rather than leaving an empty dialog looking idle
+      this.notices = [
+        ...this.notices,
+        `Benchmark failed: ${error instanceof Error ? error.message : String(error)}`
+      ];
     } finally {
       this.benchmarkRunning = false;
       // the panes were re-rendered many times during the run, so restore the real frame
@@ -824,8 +844,13 @@ export class RslApp extends LitElement {
           .results=${this.benchmarkResults}
           .running=${this.benchmarkRunning}
           .progress=${this.benchmarkProgress}
+          .quality=${this.benchmarkQuality}
           .note=${`${state.outputWidth}×${state.outputHeight}`}
           @benchmark-rerun=${() => this.runPaneBenchmark()}
+          @benchmark-quality=${(e: CustomEvent<BenchmarkQuality>) => {
+            this.benchmarkQuality = e.detail;
+            void this.runPaneBenchmark();
+          }}
           @benchmark-close=${() => (this.benchmarkCancelled = true)}
         ></rsl-benchmark>
       </main>

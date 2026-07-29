@@ -1,7 +1,12 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { panelStyles } from './shared-styles.js';
-import type { BenchmarkResult } from '../core/benchmark.js';
+import {
+  NOISE_THRESHOLD,
+  ROUND_PRESETS,
+  type BenchmarkQuality,
+  type BenchmarkResult
+} from '../core/benchmark.js';
 
 /**
  * Benchmark results, in a native `<dialog>` so focus trapping, the backdrop and Escape
@@ -18,14 +23,25 @@ export class RslBenchmark extends LitElement {
         background: linear-gradient(180deg, var(--panel-2), var(--panel));
         color: var(--ink);
         padding: 0;
-        min-width: min(620px, 92vw);
+        /* an explicit width: without one the dialog shrink-to-fits the longest line of
+           prose, which on a wide screen stretched it into a 1800px banner */
+        width: min(760px, 92vw);
         max-width: 92vw;
+        max-height: 86vh;
+        display: flex;
+        flex-direction: column;
         box-shadow: 0 40px 90px -40px #000, 0 0 0 1px rgba(125, 255, 155, 0.1);
       }
 
+      dialog:not([open]) {
+        display: none;
+      }
+
       dialog::backdrop {
-        background: rgba(2, 4, 3, 0.72);
-        backdrop-filter: blur(2px);
+        /* fully opaque, and deliberately no backdrop-filter: the canvases keep rendering
+           underneath during a run, so anything translucent or blurred would have to be
+           recomposited every frame and would compete with what we are measuring */
+        background: #020403;
       }
 
       header {
@@ -34,6 +50,11 @@ export class RslBenchmark extends LitElement {
         gap: 8px;
         padding: 10px 12px;
         border-bottom: 1px solid var(--line);
+        flex: none;
+      }
+
+      .spacer {
+        flex: 1;
       }
 
       header h2 {
@@ -50,6 +71,8 @@ export class RslBenchmark extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 10px;
+        overflow-y: auto;
+        min-height: 0;
       }
 
       table {
@@ -138,10 +161,20 @@ export class RslBenchmark extends LitElement {
         display: flex;
         gap: 8px;
         align-items: center;
+        padding: 10px 12px;
+        border-top: 1px solid var(--line);
+        flex: none;
       }
 
-      .foot .spacer {
-        flex: 1;
+      .quality {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--ink-dim);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-family: var(--font-display);
       }
     `
   ];
@@ -149,6 +182,7 @@ export class RslBenchmark extends LitElement {
   @property({ attribute: false }) results: BenchmarkResult[] = [];
   @property({ type: Boolean }) running = false;
   @property({ type: Number }) progress = 0;
+  @property({ type: String }) quality: BenchmarkQuality = 'standard';
   @property({ type: String }) note = '';
 
   @query('dialog') private dialog!: HTMLDialogElement;
@@ -161,8 +195,8 @@ export class RslBenchmark extends LitElement {
     if (this.dialog.open) this.dialog.close();
   }
 
-  private emit(type: string): void {
-    this.dispatchEvent(new CustomEvent(type, { bubbles: true, composed: true }));
+  private emit(type: string, detail?: unknown): void {
+    this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 
   private renderRow(result: BenchmarkResult, index: number) {
@@ -175,17 +209,30 @@ export class RslBenchmark extends LitElement {
       <tr class=${reference ? 'reference' : faster ? 'faster' : slower ? 'slower' : ''}>
         <td class="name">
           ${result.label}
-          <small>${result.shaders.length} pass${result.shaders.length === 1 ? '' : 'es'} · ${shaders}</small>
+          <small
+            >${result.shaders.length} pass${result.shaders.length === 1 ? '' : 'es'} ·
+            ${shaders}</small
+          >
         </td>
         <td class="num">
-          ${Number.isFinite(result.mean) ? result.mean.toFixed(3) : '—'}
+          ${Number.isFinite(result.median) ? result.median.toFixed(3) : '—'}
           <div class="dev">
-            ± ${result.deviation.toFixed(3)}
-            ${result.noisy ? html`<span class="flag" title="High variance — close other GPU-heavy tabs and run again">⚠</span>` : nothing}
+            ${result.deviation >= 0.0005 ? `± ${result.deviation.toFixed(3)}` : '± <0.001'}
+            ${result.noisy
+              ? html`<span
+                  class="flag"
+                  title="p10–p90 spread is over ${Math.round(
+                    NOISE_THRESHOLD * 100
+                  )}% of the median — close other GPU-heavy tabs, or run Thorough"
+                  >⚠</span
+                >`
+              : nothing}
           </div>
         </td>
         <td class="num dev">
-          ${Number.isFinite(result.min) ? `${result.min.toFixed(3)}–${result.max.toFixed(3)}` : '—'}
+          ${Number.isFinite(result.p10)
+            ? `${result.p10.toFixed(3)}–${result.p90.toFixed(3)}`
+            : '—'}
         </td>
         <td class="num pct">
           ${Number.isFinite(result.percent) ? `${result.percent.toFixed(0)}%` : '—'}
@@ -196,12 +243,13 @@ export class RslBenchmark extends LitElement {
 
   override render() {
     const noisy = this.results.some((result) => result.noisy);
+    const dropped = this.results.reduce((sum, result) => sum + result.dropped, 0);
 
     return html`
       <dialog @close=${() => this.emit('benchmark-close')}>
         <header>
           <h2>Benchmark</h2>
-          <span class="spacer" style="flex:1"></span>
+          <span class="spacer"></span>
           <button class="ghost" aria-label="Close" @click=${() => this.close()}>✕</button>
         </header>
         <div class="body">
@@ -217,9 +265,11 @@ export class RslBenchmark extends LitElement {
                   <thead>
                     <tr>
                       <th>Pipeline</th>
-                      <th class="num">GPU ms</th>
-                      <th class="num">Range</th>
-                      <th class="num">Perf.</th>
+                      <th class="num" title="Median GPU milliseconds per frame">GPU ms</th>
+                      <th class="num" title="10th to 90th percentile of the samples">
+                        p10–p90
+                      </th>
+                      <th class="num" title="Relative to the current pipeline">Perf.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -227,29 +277,49 @@ export class RslBenchmark extends LitElement {
                   </tbody>
                 </table>
                 <p class="hint">
-                  GPU time per frame at ${this.note}, measured with timer queries and averaged over
-                  ${this.results[0]?.samples ?? 0} runs after warmup. <b>Perf.</b> is relative to the
-                  current pipeline, so half the speed reads 50%. These numbers rank pipelines against
-                  each other on <em>this</em> GPU; they are not a prediction of handheld performance.
+                  Median GPU time per frame at ${this.note}, over
+                  ${this.results[0]?.samples ?? 0} samples after warmup. <b>Perf.</b> is
+                  relative to the current pipeline, so half the speed reads 50%. Ranks
+                  pipelines on <em>this</em> GPU — not a prediction of handheld performance.
+                  ${dropped > 0
+                    ? html`<br />${dropped} sample${dropped === 1 ? '' : 's'} discarded by the
+                        driver.`
+                    : nothing}
                   ${noisy
-                    ? html`<br /><span class="flag">⚠ One or more results varied too much to trust — close other GPU-heavy tabs and run again.</span>`
+                    ? html`<br /><span class="flag"
+                          >⚠ Some results varied too much to trust — close other GPU-heavy tabs,
+                          or run Thorough.</span
+                        >`
                     : nothing}
                 </p>
               `
             : this.running
               ? nothing
               : html`<p class="hint">No results yet.</p>`}
-          <div class="foot">
-            <button
-              class="primary"
+        </div>
+        <div class="foot">
+          <button class="primary" ?disabled=${this.running} @click=${() => this.emit('benchmark-rerun')}>
+            ↻ Run again
+          </button>
+          <label class="quality">
+            <span>Samples</span>
+            <select
               ?disabled=${this.running}
-              @click=${() => this.emit('benchmark-rerun')}
+              .value=${this.quality}
+              @change=${(e: Event) =>
+                this.emit('benchmark-quality', (e.target as HTMLSelectElement).value)}
             >
-              ↻ Run again
-            </button>
-            <span class="spacer"></span>
-            <button @click=${() => this.close()}>Close</button>
-          </div>
+              ${Object.entries(ROUND_PRESETS).map(
+                ([key, rounds]) => html`
+                  <option value=${key} ?selected=${key === this.quality}>
+                    ${key[0].toUpperCase()}${key.slice(1)} · ${rounds}
+                  </option>
+                `
+              )}
+            </select>
+          </label>
+          <span class="spacer"></span>
+          <button @click=${() => this.close()}>Close</button>
         </div>
       </dialog>
     `;
