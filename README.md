@@ -30,6 +30,7 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 - **1–3 shader passes** with the exact NextUI options: `filter`, `srctype`, `scaletype`, `upscale` (`1×`–`8×` or `screen`)
 - **25 stock shaders** copied from NextUI's `Shaders/glsl`, plus drag & drop of your own `.glsl`
 - **25 stock NextUI presets** (`real-gameboy`, `crt-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
+- **Your own presets**, saved in the browser and listed above the stock ones, with rename, update and delete
 - **16 real game screenshots** at native resolution — 2 per platform, unfiltered, from libretro-thumbnails
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps, saved with the preset
 - **NextUI screen scaling** — `Native`, `Aspect`, `Aspect (screen)`, `Fullscreen`, `Cropped` — with real letterboxing
@@ -92,11 +93,18 @@ you are editing; the others show the raw source (the default) or any stock prese
 While comparing, **Export PNG 1:1** writes the comparison exactly as laid out, at the output
 resolution; **Pane A** exports just the edited pipeline.
 
-### Starting from a NextUI preset
+### Presets
 
 The 25 stock configs from `NextUI/skeleton/BASE/Shaders` are bundled in
-`public/shaders/presets/`. Pick one in the **NextUI stock presets** dropdown of the cfg panel and
-the whole pipeline — passes, filters, scaling and shader parameters — is applied at once.
+`public/shaders/presets/`. Pick one in the **Presets** dropdown of the cfg panel and the whole
+pipeline — passes, filters, scaling and shader parameters — is applied at once.
+
+**Save preset** stores the pipeline you are working on in the browser as a user preset. Your presets
+are listed first, above the stock ones, and can be renamed, updated to the current pipeline or
+deleted. A dot next to the name means the pipeline has diverged from what was saved.
+
+A user preset holds the same cfg text the panel shows, so loading one is identical to loading a
+`.cfg` file — including any core options it carries.
 
 ### Adding your own shader
 
