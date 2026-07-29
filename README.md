@@ -28,9 +28,9 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 ## Features
 
 - **1–3 shader passes** with the exact NextUI options: `filter`, `srctype`, `scaletype`, `upscale` (`1×`–`8×` or `screen`)
-- **29 stock shaders** — 21 from NextUI's `Shaders/glsl` and the 8 MIT `*-perfect` ones from
+- **26 stock shaders** — 21 from NextUI's `Shaders/glsl` and the 5 MIT `*-perfect` ones from
   [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders) — plus **your own** added from a file or a URL
-- **29 stock presets** (`real-gameboy`, `crt-perfect-v5`, `lcd-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
+- **26 stock presets** (`real-gameboy`, `crt-perfect`, `lcd-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
 - **Your own presets**, saved in the browser and listed above the stock ones, with rename, update and delete
 - **16 real game screenshots** at native resolution — 2 per platform, unfiltered, from libretro-thumbnails
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps, saved with the preset
@@ -141,7 +141,7 @@ prediction of handheld performance.
 
 ### Presets
 
-The 29 stock configs are bundled in
+The 26 stock configs are bundled in
 `public/shaders/presets/`. Pick one in the **Presets** dropdown of the cfg panel and the whole
 pipeline — passes, filters, scaling and shader parameters — is applied at once.
 
@@ -174,7 +174,7 @@ or fetch one from a URL. Anything you add is kept in `localStorage`, appears in 
 
 A shader is compiled before it is stored, so a broken one is reported with its compile log instead
 of silently rendering as an empty pass. Names are always normalised to `.glsl` and can never shadow
-a bundled shader — presets reference shaders by file name, so a custom `crt-perfect-v4.glsl` would
+a bundled shader — presets reference shaders by file name, so a custom `crt-perfect.glsl` would
 otherwise change what every stock preset renders; collisions get a `-2` suffix instead.
 
 > [!NOTE]
@@ -308,8 +308,8 @@ The pipeline is intentionally faithful, including quirks. Known deviations:
 ## Project structure
 
 ```
-public/shaders/glsl/      29 stock shaders (21 NextUI + 8 perfect-retroshaders)
-public/shaders/presets/   29 stock shader configs (incl. the per-system sets/)
+public/shaders/glsl/      26 stock shaders (21 NextUI + 5 perfect-retroshaders)
+public/shaders/presets/   26 stock shader configs (incl. the per-system sets/)
 public/shaders/           default.glsl — the final scale pass · LICENSE · NOTICE
 public/samples/           game screenshots + index.json + NOTICE
 scripts/                  asset manifest generator

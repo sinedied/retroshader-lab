@@ -87,6 +87,14 @@ Then give any newly added shader a preset, update `public/shaders/NOTICE` if the
 licence of a file changed, and confirm in the browser that every shader still compiles — the Log tab
 should read "All shaders compiled".
 
+**A sync can remove shaders, not only add them.** `perfect-retroshaders` folded
+`crt-perfect-v2`…`v5b` back into a single `crt-perfect`. Deleting a shader means deleting its preset
+in the same commit, or the reference check above fails — and it is worth grepping the whole tree
+first, since a *NextUI* preset referencing a removed file would be a much worse breakage than one of
+ours. Saved sessions and shared links can still name a shader that is gone; `render()` reports
+`shader "x" is not loaded` as a warning, so that degrades loudly rather than silently, which is why
+the pass loop keeps that check.
+
 The pipeline semantics come from NextUI's C, not from guesswork:
 
 | What | Where |
@@ -210,7 +218,7 @@ CustomEvent and TypeScript `private` is not a runtime barrier:
 ```js
 const app = document.querySelector('rsl-app');
 const fire = (el, t, d) => el.dispatchEvent(new CustomEvent(t, { detail: d, bubbles: true, composed: true }));
-fire(app.shadowRoot.querySelector('rsl-dock'), 'preset-load', { kind: 'stock', id: 'crt-perfect-v4.cfg' });
+fire(app.shadowRoot.querySelector('rsl-dock'), 'preset-load', { kind: 'stock', id: 'crt-perfect.cfg' });
 app.appState; app.pipelines; app.userPresets; app.source;   // all readable
 ```
 
