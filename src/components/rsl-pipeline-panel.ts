@@ -11,6 +11,9 @@ import {
   stepIndexOf
 } from '../core/pragma-params.js';
 
+/** Sentinel option value: not a shader name, so it cannot collide with a real one. */
+const ADD_SHADER_VALUE = '\u0000add-shader';
+
 /**
  * The shader pipeline editor: up to 3 passes, each exposing the exact NextUI options
  * (`minarch_shaderN`, `_filter`, `_srctype`, `_scaletype`, `_upscale`) plus the
@@ -242,17 +245,23 @@ export class RslPipelinePanel extends LitElement {
             name="shader"
             aria-label="Shader"
             .value=${pass.shader}
-            @change=${(e: Event) =>
-              this.emit('pass-change', {
-                index,
-                patch: { shader: (e.target as HTMLSelectElement).value }
-              })}
+            @change=${(e: Event) => {
+              const select = e.target as HTMLSelectElement;
+              if (select.value === ADD_SHADER_VALUE) {
+                // restore the selection: the dock is where the shader actually gets added
+                select.value = pass.shader;
+                this.emit('shader-library-open', undefined);
+                return;
+              }
+              this.emit('pass-change', { index, patch: { shader: select.value } });
+            }}
           >
             ${this.shaderNames.map(
               (name) => html`
                 <option value=${name} ?selected=${name === pass.shader}>${name}</option>
               `
             )}
+            <option value=${ADD_SHADER_VALUE}>＋ Add shader…</option>
           </select>
           <button
             class="icon-btn ghost"

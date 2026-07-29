@@ -5,10 +5,11 @@ import type { CompileIssue } from '../core/types.js';
 import type { PassRenderInfo } from '../core/pipeline.js';
 import type { UserPreset } from '../core/user-presets.js';
 import type { SelectedPreset } from '../core/state.js';
+import type { ShaderEntry } from '../core/shader-library.js';
 
-type Tab = 'cfg' | 'passes' | 'log';
+type Tab = 'cfg' | 'passes' | 'shaders' | 'log';
 
-/** Right dock: live NextUI cfg, pass inspector and GLSL compile log. */
+/** Right dock: live NextUI cfg, pass inspector, shader library and GLSL compile log. */
 @customElement('rsl-dock')
 export class RslDock extends LitElement {
   static override styles = [
@@ -163,8 +164,118 @@ export class RslDock extends LitElement {
         border-top: 1px solid var(--line);
       }
 
-      .issue {
-        border: 1px solid rgba(255, 107, 95, 0.35);
+      .drop {
+        border: 1px dashed var(--line-strong);
+        border-radius: var(--radius);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .drop.over {
+        border-color: var(--phosphor);
+        background: rgba(125, 255, 155, 0.06);
+      }
+
+      .drop .hint {
+        margin: 0;
+      }
+
+      .file input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .file {
+        display: inline-block;
+        margin: 0;
+      }
+
+      .file .btn {
+        display: inline-block;
+        cursor: pointer;
+        font-family: var(--font-display);
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink);
+        background: var(--panel-3);
+        border: 1px solid var(--line-strong);
+        border-radius: 2px;
+        padding: 6px 10px;
+      }
+
+      .file .btn:hover {
+        border-color: var(--phosphor-dim);
+        color: var(--phosphor);
+      }
+
+      h3.section {
+        margin: 14px 0 6px;
+      }
+
+      .shader-notice {
+        margin: 0;
+        font-size: 11px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .shader-notice.ok {
+        color: var(--phosphor);
+      }
+
+      .shader-notice.bad {
+        color: var(--amber);
+      }
+
+      .shader-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .shader-list li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 6px;
+        border: 1px solid transparent;
+        border-radius: 2px;
+        background: rgba(0, 0, 0, 0.25);
+      }
+
+      .shader-list .name {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        font-size: 11.5px;
+      }
+
+      .shader-list .meta {
+        color: var(--ink-faint);
+        font-size: 10px;
+        white-space: nowrap;
+      }
+
+      .shader-list.muted li {
+        background: none;
+        color: var(--ink-dim);
+      }
+
+      .shader-list button {
+        padding: 2px 7px;
+      }
+
+      .issue {        border: 1px solid rgba(255, 107, 95, 0.35);
         border-left-width: 3px;
         border-radius: 2px;
         background: rgba(255, 107, 95, 0.05);
@@ -227,10 +338,19 @@ export class RslDock extends LitElement {
   @property({ attribute: false }) passes: PassRenderInfo[] = [];
   @property({ attribute: false }) issues: CompileIssue[] = [];
   @property({ attribute: false }) warnings: string[] = [];
+  /** Every shader in the library, bundled and custom. */
+  @property({ attribute: false }) shaders: ShaderEntry[] = [];
+  /** Shader names the current pipeline uses, which therefore cannot be deleted. */
+  @property({ attribute: false }) shadersInUse: string[] = [];
+  /** Result of the last add or delete, shown next to the controls that caused it. */
+  @property({ attribute: false }) shaderNotice: { ok: boolean; text: string } | undefined =
+    undefined;
 
   @state() private tab: Tab = 'cfg';
   @state() private draft: string | undefined = undefined;
   @state() private copied = false;
+  @state() private shaderUrl = '';
+  @state() private dropping = false;
 
   private emit<T>(type: string, detail: T): void {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -521,6 +641,130 @@ ${issue.source
     `;
   }
 
+  private renderShaders() {
+    const custom = this.shaders.filter((entry) => entry.custom);
+    const bundled = this.shaders.filter((entry) => !entry.custom);
+    const inUse = new Set(this.shadersInUse);
+
+    return html`
+      <div
+        class="drop ${this.dropping ? 'over' : ''}"
+        @dragover=${(e: DragEvent) => {
+          e.preventDefault();
+          this.dropping = true;
+        }}
+        @dragleave=${() => (this.dropping = false)}
+        @drop=${(e: DragEvent) => {
+          e.preventDefault();
+          this.dropping = false;
+          const files = [...(e.dataTransfer?.files ?? [])];
+          if (files.length > 0) this.emit('shader-add-file', files);
+        }}
+      >
+        <p class="hint">Drop a <code>.glsl</code> here, or</p>
+        <div class="row">
+          <label class="file">
+            <input
+              type="file"
+              accept=".glsl,.frag,.fs,.vert,.txt,text/plain"
+              multiple
+              @change=${(e: Event) => {
+                const input = e.target as HTMLInputElement;
+                const files = [...(input.files ?? [])];
+                if (files.length > 0) this.emit('shader-add-file', files);
+                // let the same file be picked again after a failure
+                input.value = '';
+              }}
+            />
+            <span class="btn">Choose file…</span>
+          </label>
+        </div>
+        <div class="row">
+          <input
+            type="url"
+            placeholder="https://raw.githubusercontent.com/…/shader.glsl"
+            .value=${this.shaderUrl}
+            @input=${(e: Event) => (this.shaderUrl = (e.target as HTMLInputElement).value)}
+            @keydown=${(e: KeyboardEvent) => {
+              if (e.key === 'Enter') this.submitUrl();
+            }}
+          />
+          <button
+            class="primary"
+            ?disabled=${this.shaderUrl.trim().length === 0}
+            @click=${() => this.submitUrl()}
+          >
+            Fetch
+          </button>
+        </div>
+        <p class="hint">
+          A URL only works if the server allows cross-origin reads. Raw GitHub links and CDNs
+          do; most plain web servers do not — download the file and add it from disk instead.
+        </p>
+        ${this.shaderNotice
+          ? html`<p class="shader-notice ${this.shaderNotice.ok ? 'ok' : 'bad'}">
+              ${this.shaderNotice.ok ? '✓' : '⚠'} ${this.shaderNotice.text}
+            </p>`
+          : nothing}
+      </div>
+
+      <h3 class="label section">Your shaders (${custom.length})</h3>
+      ${custom.length === 0
+        ? html`<p class="hint">None yet. Anything you add appears here and is kept in this browser.</p>`
+        : html`
+            <ul class="shader-list">
+              ${custom.map(
+                (entry) => html`
+                  <li>
+                    <span class="name">${entry.name}</span>
+                    <span class="meta"
+                      >${entry.params.length} param${entry.params.length === 1 ? '' : 's'}</span
+                    >
+                    <button
+                      class="ghost"
+                      ?disabled=${inUse.has(entry.name)}
+                      title=${inUse.has(entry.name)
+                        ? 'In use by the current pipeline — remove the pass first'
+                        : `Delete ${entry.name}`}
+                      aria-label=${`Delete ${entry.name}`}
+                      @click=${() => this.emit('shader-delete', entry.name)}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                `
+              )}
+            </ul>
+          `}
+
+      <h3 class="label section">Bundled from NextUI (${bundled.length})</h3>
+      <ul class="shader-list muted">
+        ${bundled.map(
+          (entry) => html`
+            <li>
+              <span class="name">${entry.name}</span>
+              <span class="meta"
+                >${entry.params.length} param${entry.params.length === 1 ? '' : 's'}</span
+              >
+            </li>
+          `
+        )}
+      </ul>
+    `;
+  }
+
+  private submitUrl(): void {
+    const url = this.shaderUrl.trim();
+    if (url.length === 0) return;
+    this.emit('shader-add-url', url);
+    this.shaderUrl = '';
+  }
+
+  /** Brings the shader library into view, for the pass editor's quick-add. */
+  showShaders(): void {
+    this.tab = 'shaders';
+  }
+
   override render() {
     const problems = this.issues.length + this.warnings.length;
     return html`
@@ -541,6 +785,13 @@ ${issue.source
         </button>
         <button
           role="tab"
+          aria-selected=${this.tab === 'shaders'}
+          @click=${() => (this.tab = 'shaders')}
+        >
+          Shaders
+        </button>
+        <button
+          role="tab"
           aria-selected=${this.tab === 'log'}
           @click=${() => (this.tab = 'log')}
         >
@@ -552,7 +803,9 @@ ${issue.source
           ? this.renderCfg()
           : this.tab === 'passes'
             ? this.renderPasses()
-            : this.renderLog()}
+            : this.tab === 'shaders'
+              ? this.renderShaders()
+              : this.renderLog()}
       </div>
     `;
   }
