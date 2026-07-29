@@ -22,7 +22,7 @@ perfect-retroshaders  (MIT)
     Copyright (c) 2026 sinedied, MIT — the full text is in each file's header.
 
     glsl/   crt-perfect.glsl, lcd-perfect.glsl, lcd-perfect-v2a.glsl,
-            lcd-perfect-v2b.glsl, pixel-perfect.glsl
+            lcd-perfect-v2b.glsl, lcd-perfect-v3.glsl, pixel-perfect.glsl
 
     These were previously carried by NextUI and released into the public domain;
     they are now maintained in their own repository under MIT. NextUI no longer
@@ -46,7 +46,7 @@ stated in its own header. As shipped here, that is:
 
     MIT (see perfect-retroshaders above):
         crt-perfect.glsl, lcd-perfect.glsl, lcd-perfect-v2a.glsl,
-        lcd-perfect-v2b.glsl, pixel-perfect.glsl
+        lcd-perfect-v2b.glsl, lcd-perfect-v3.glsl, pixel-perfect.glsl
 
     Public domain:
         image-adjustment.glsl, lcd1x.glsl, res-independent-scanlines.glsl,
