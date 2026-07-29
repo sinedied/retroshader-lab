@@ -221,6 +221,8 @@ export class RslViewport extends LitElement {
   @property({ attribute: false }) presets: string[] = [];
   @property({ attribute: false }) dstRect: Rect | undefined = undefined;
   @property({ type: Number }) renderMs = 0;
+  /** False when the GPU timer extension is missing, so benchmarking is impossible. */
+  @property({ type: Boolean }) canBenchmark = true;
 
   @state() private fitScale = 1;
   @state() private grabbing = false;
@@ -564,6 +566,17 @@ export class RslViewport extends LitElement {
         </div>
         ${this.renderPanePicker(0)} ${this.paneCount === 3 ? this.renderPanePicker(1) : nothing}
         <span class="spacer"></span>
+        <button
+          class="ghost"
+          ?disabled=${!this.canBenchmark}
+          aria-label="Benchmark the panes"
+          title=${this.canBenchmark
+            ? 'Measure the GPU cost of each pane'
+            : 'Needs EXT_disjoint_timer_query_webgl2, which this browser does not expose'}
+          @click=${() => this.emit('benchmark-open', undefined)}
+        >
+          ⏱<span class="btn-label">Benchmark</span>
+        </button>
         ${this.compareMode === 'overlay'
           ? html`
               <button

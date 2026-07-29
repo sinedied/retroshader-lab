@@ -5,14 +5,17 @@ import './rsl-source-panel.js';
 import './rsl-pipeline-panel.js';
 import './rsl-viewport.js';
 import './rsl-dock.js';
+import './rsl-benchmark.js';
 import type { RslViewport } from './rsl-viewport.js';
+import type { RslBenchmark } from './rsl-benchmark.js';
 import {
   ShaderPipeline,
   computePassSizes,
   type PassRenderInfo,
   type RenderResult
 } from '../core/pipeline.js';
-import { panePipelineConfig } from '../core/preset-config.js';
+import { panePipelineConfig, paneLabel } from '../core/preset-config.js';
+import { runBenchmark, type BenchmarkResult, type BenchmarkTarget } from '../core/benchmark.js';
 import { UserPresetStore } from '../core/user-presets.js';
 import {
   ShaderLibrary,
@@ -223,6 +226,7 @@ export class RslApp extends LitElement {
   ];
 
   @query('rsl-viewport') private viewport!: RslViewport;
+  @query('rsl-benchmark') private benchmarkDialog!: RslBenchmark;
 
   @state() private appState: AppState = store.value;
   @state() private source: SourceImage | undefined = undefined;
@@ -234,6 +238,10 @@ export class RslApp extends LitElement {
   /** Messages from user actions (import, preset, upload); render warnings are separate
       because every render replaces them. */
   @state() private notices: string[] = [];
+  @state() private benchmarkResults: BenchmarkResult[] = [];
+  @state() private benchmarkRunning = false;
+  @state() private benchmarkProgress = 0;
+  private benchmarkCancelled = false;
 
   private readonly library = new ShaderLibrary();
   private readonly userPresets = new UserPresetStore();
@@ -355,13 +363,10 @@ export class RslApp extends LitElement {
   }
 
   /** Compiles anything the pipeline needs, then renders both canvases. */
-  private renderPipeline(): void {
-    if (!this.main || !this.source || !this.ready) return;
+  /** Config of every visible pane, pane 0 being the pipeline under edit. */
+  private paneConfigsForRender(): PipelineConfig[] {
     const state = this.appState;
     const paneCount = state.compareMode === 'off' ? 1 : state.paneCount;
-
-    // Pane 0 is the edited pipeline, the others come from the pane selection. Preset
-    // panes inherit the geometry so only the shaders differ between panes.
     const configs: PipelineConfig[] = [state.pipeline];
     for (let i = 1; i < paneCount; i++) {
       const resolved = this.paneConfigs[i - 1];
@@ -376,6 +381,13 @@ export class RslApp extends LitElement {
           : { ...state.pipeline, passes: [] }
       );
     }
+    return configs;
+  }
+
+  private renderPipeline(): void {
+    if (!this.main || !this.source || !this.ready) return;
+    const state = this.appState;
+    const configs = this.paneConfigsForRender();
 
     const started = performance.now();
     let mainResult: RenderResult | undefined;
@@ -475,6 +487,47 @@ export class RslApp extends LitElement {
   }
 
   /** Loads either a bundled preset or one of the user's own, both as cfg text. */
+  /** Measures each visible pane, pane 0 being the reference every percentage uses. */
+  private async runPaneBenchmark(): Promise<void> {
+    if (!this.source || !this.main?.canTime || this.benchmarkRunning) return;
+    const state = this.appState;
+    const configs = this.paneConfigsForRender();
+
+    const targets: BenchmarkTarget[] = configs.flatMap((config, index) => {
+      const pipeline = this.pipelines[index];
+      if (!pipeline) return [];
+      const label = index === 0 ? 'Current' : paneLabel(state.panes[index - 1]?.preset);
+      return [{ label, shaders: config.passes.map((pass) => pass.shader), pipeline, config }];
+    });
+    if (targets.length === 0) return;
+
+    this.benchmarkRunning = true;
+    this.benchmarkCancelled = false;
+    this.benchmarkProgress = 0;
+    this.benchmarkResults = [];
+
+    try {
+      const results = await runBenchmark(targets, {
+        source: this.source,
+        screenW: state.outputWidth,
+        screenH: state.outputHeight,
+        finalShaderName: FINAL_SHADER,
+        onProgress: (done, total) => (this.benchmarkProgress = done / total),
+        shouldCancel: () => this.benchmarkCancelled
+      });
+      if (!this.benchmarkCancelled) this.benchmarkResults = results;
+    } finally {
+      this.benchmarkRunning = false;
+      // the panes were re-rendered many times during the run, so restore the real frame
+      this.scheduleRender();
+    }
+  }
+
+  private openBenchmark(): void {
+    this.benchmarkDialog.show();
+    void this.runPaneBenchmark();
+  }
+
   private async onPresetLoad(selection: { kind: string; id: string }): Promise<void> {
     try {
       if (selection.kind === 'user') {
@@ -738,6 +791,8 @@ export class RslApp extends LitElement {
             store.setPane(e.detail.index, e.detail.preset);
             void this.refreshPanes();
           }}
+          .canBenchmark=${this.main?.canTime ?? true}
+          @benchmark-open=${() => this.openBenchmark()}
           @export-png=${(e: CustomEvent<{ composite: boolean }>) => {
             const name = `retroshader-${state.sourceSystem}-${state.outputWidth}x${state.outputHeight}`;
             if (e.detail?.composite) this.viewport.exportComposite(`${name}-compare.png`);
@@ -764,6 +819,15 @@ export class RslApp extends LitElement {
           @preset-update=${(e: CustomEvent<string>) => this.onPresetUpdate(e.detail)}
           @preset-delete=${(e: CustomEvent<string>) => this.onPresetDelete(e.detail)}
         ></rsl-dock>
+
+        <rsl-benchmark
+          .results=${this.benchmarkResults}
+          .running=${this.benchmarkRunning}
+          .progress=${this.benchmarkProgress}
+          .note=${`${state.outputWidth}×${state.outputHeight}`}
+          @benchmark-rerun=${() => this.runPaneBenchmark()}
+          @benchmark-close=${() => (this.benchmarkCancelled = true)}
+        ></rsl-benchmark>
       </main>
     `;
   }
