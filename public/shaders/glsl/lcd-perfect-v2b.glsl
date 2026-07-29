@@ -1,4 +1,4 @@
-// lcd-perfect - an LCD matrix and RGB stripes over a pixel-perfect scale.
+// lcd-perfect-v2b - an LCD matrix and RGB stripes over a pixel-perfect scale.
 // -----------------------------------------------------------------------------
 // Author:  sinedied
 // Licence: MIT - Copyright (c) 2026 sinedied
@@ -16,6 +16,7 @@
 // PARAMETERS
 //
 //   lp_grid        0.00 - 1.00  Grid visibility. 0 disables it.
+//   lp_balance     0.00 - 1.00  Row/column balance. 0 rows, 1 columns.
 //   lp_gap         0.00 - 0.50  Matrix thickness, as a fraction of a cell.
 //   lp_subpixels   0.00 - 1.00  RGB stripe visibility. 0 disables them.
 //   lp_layout      0 / 1        Stripe order: RGB or BGR.
@@ -25,17 +26,21 @@
 // Simulates a handheld LCD panel: a grid of rectangular apertures separated by
 // an opaque matrix, each split into three coloured stripes. A cell is a
 // rectangle, so the average of the pattern over an output pixel has a closed
-// form and is evaluated exactly instead of being band-limited. The grid
-// therefore costs no brightness at any scale, and its contrast fades out on its
-// own as the cells approach the pixel grid.
+// form and is evaluated exactly instead of being band-limited.
+//
+// This is lcd-perfect with the matrix thickness split between the axes by
+// lp_balance instead of by a fixed constant. Real panels are row-dominant - a
+// Game Boy Color measures a 9% matrix down against 3.7% across - but lcd1x is
+// the reverse at about 4:1, which is a balance of 0.8.
 //
 // Notes:
 // - Render at the output resolution, 1:1 with the display.
-// - The stripes need about three output pixels per cell and fade out below
-//   that, so they only show on small sources or high output resolutions.
+// - The stripes need a few output pixels per cell and fade out below that, so
+//   they only show on small sources or high output resolutions.
 
-#pragma parameter lp_grid       "Grid visibility"          0.30 0.00 1.00 0.05
-#pragma parameter lp_gap        "Matrix thickness"         0.16 0.00 0.50 0.01
+#pragma parameter lp_grid       "Grid visibility"          0.35 0.00 1.00 0.01
+#pragma parameter lp_balance    "Row/column balance"       0.84 0.00 1.00 0.01
+#pragma parameter lp_gap        "Matrix thickness"         0.12 0.00 0.50 0.01
 #pragma parameter lp_subpixels  "RGB stripe visibility"    0.20 0.00 1.00 0.05
 #pragma parameter lp_layout     "Stripe order 0=RGB 1=BGR" 0.00 0.00 1.00 1.00
 #pragma parameter lp_brightness "Brightness"               1.00 0.25 4.00 0.05
@@ -112,23 +117,21 @@ COMPAT_VARYING vec4 TEX0;
 
 #ifdef PARAMETER_UNIFORM
 uniform COMPAT_PRECISION float lp_grid;
+uniform COMPAT_PRECISION float lp_balance;
 uniform COMPAT_PRECISION float lp_gap;
 uniform COMPAT_PRECISION float lp_subpixels;
 uniform COMPAT_PRECISION float lp_layout;
 uniform COMPAT_PRECISION float lp_brightness;
 uniform COMPAT_PRECISION float lp_gamma;
 #else
-#define lp_grid 0.30
-#define lp_gap 0.16
+#define lp_grid 0.35
+#define lp_balance 0.84
+#define lp_gap 0.12
 #define lp_subpixels 0.20
 #define lp_layout 0.0
 #define lp_brightness 1.00
 #define lp_gamma 1.00
 #endif
-
-// The column matrix as a fraction of the row matrix, measured off a Game Boy
-// Color panel: 3.7% of the cell across against 9% down.
-#define GAP_ASPECT 0.4
 
 // Antiderivative of the aperture profile, normalised so its mean over a cell is
 // exactly 1 whatever the parameters are. The aperture is a trapezoid: lit across
@@ -219,7 +222,12 @@ void main()
     vec2 h = 0.4995 * d;
     vec2 B = floor(p + 0.5);
 
-    vec2 aw = max(1.0 - lp_gap * vec2(GAP_ASPECT, 1.0), 1e-3);
+    // Matrix thickness split between the axes. x is the gap across the columns
+    // and so draws the vertical structure; 0.5 splits it evenly and the ratio is
+    // b / (1 - b). A fixed constant here was what stopped the first version from
+    // ever reaching a column-dominant look: it capped the column gap at 40% of
+    // the row gap, so the ratio topped out at 0.61 however far lp_gap was pushed.
+    vec2 aw = max(1.0 - lp_gap * 2.0 * vec2(lp_balance, 1.0 - lp_balance), 1e-3);
     // ramp width, twice the matrix it joins, held clear of the flat top so the
     // trapezoid never collapses into a triangle
     vec2 at = min(max(2.0 * (1.0 - aw), 1e-4), 0.45 * aw);
@@ -286,13 +294,21 @@ void main()
     // boundary, so they barely correlate with the scaler's transition pixel.
     //
     // They do need a fade. The stripe pattern repeats once per cell however thin
-    // the stripes are, so unlike the grid it never flattens; below roughly three
-    // output pixels per cell there is no room for three of them and what survives
-    // is colour speckle at full strength rather than a fading tint.
+    // the stripes are, so unlike the grid it never flattens; below a few output
+    // pixels per cell there is no room for three of them and what survives is
+    // colour speckle at full strength rather than a fading tint.
+    //
+    // The window is measured, not assumed. A fade of 3 to 6 leaves the stripes
+    // at 1.3% of their strength at 3.2 output pixels per cell - which is
+    // 320x240 into 1024x768, the most common scale there is - so they did
+    // nothing at all exactly where they were most wanted. 2.5 to 5.0 takes the
+    // colour they deliver there from 0.6 to 9 levels while holding the beat
+    // under threshold; opening it further to 2.5 to 4.0 gives 21 levels but
+    // costs a beat of 0.57 on the hard-edged aperture, which is over budget.
     // ------------------------------------------------------------------
     vec3 stripe = vec3(1.0);
     if (lp_subpixels > 0.0) {
-        float amount = lp_subpixels * smoothstep(3.0, 6.0, 1.0 / d.x);
+        float amount = lp_subpixels * smoothstep(2.5, 5.0, 1.0 / d.x);
         if (amount > 0.0) {
             vec3 third = vec3(1.0 / 3.0);
             // Stripe edges get a ramp too, but a much narrower one than the

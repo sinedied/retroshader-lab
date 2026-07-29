@@ -21,15 +21,14 @@ perfect-retroshaders  (MIT)
     https://github.com/sinedied/perfect-retroshaders
     Copyright (c) 2026 sinedied, MIT — the full text is in each file's header.
 
-    glsl/   crt-perfect.glsl, crt-perfect-v2.glsl, crt-perfect-v3.glsl,
-            crt-perfect-v4.glsl, crt-perfect-v5.glsl, crt-perfect-v5b.glsl,
-            lcd-perfect.glsl, pixel-perfect.glsl
+    glsl/   crt-perfect.glsl, lcd-perfect.glsl, lcd-perfect-v2a.glsl,
+            lcd-perfect-v2b.glsl, pixel-perfect.glsl
 
     These were previously carried by NextUI and released into the public domain;
     they are now maintained in their own repository under MIT. NextUI no longer
     ships them, so this project tracks them from upstream directly.
 
-    Their presets in presets/ (crt-perfect*.cfg, lcd-perfect.cfg,
+    Their presets in presets/ (crt-perfect.cfg, lcd-perfect*.cfg,
     pixel-perfect.cfg) are written for this project rather than copied, since the
     upstream repository does not carry minarch configs. Each uses the pass
     settings its shader's header requires: a NEAREST sampler and rendering at the
@@ -46,9 +45,8 @@ stated in its own header. As shipped here, that is:
         pixel_art_AA.glsl, scale3x.glsl
 
     MIT (see perfect-retroshaders above):
-        crt-perfect.glsl, crt-perfect-v2.glsl, crt-perfect-v3.glsl,
-        crt-perfect-v4.glsl, crt-perfect-v5.glsl, crt-perfect-v5b.glsl,
-        lcd-perfect.glsl, pixel-perfect.glsl
+        crt-perfect.glsl, lcd-perfect.glsl, lcd-perfect-v2a.glsl,
+        lcd-perfect-v2b.glsl, pixel-perfect.glsl
 
     Public domain:
         image-adjustment.glsl, lcd1x.glsl, res-independent-scanlines.glsl,
