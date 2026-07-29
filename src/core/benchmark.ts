@@ -32,8 +32,12 @@ const WARMUP_ITERATIONS = 10;
  * order of a hundred milliseconds to raise its clock under load, and a short warmup was
  * measured handing back per-render costs five times the steady state — which then sized
  * every measured batch far too small.
+ *
+ * 400ms was not enough after the GPU had been left idle: the first quarter of a measured
+ * run still read ~35% above the remaining three quarters. Warmup is the limiting factor
+ * on accuracy far more than the number of samples is.
  */
-const WARMUP_MS = 400;
+const WARMUP_MS = 700;
 /**
  * How long each measured batch should take on the GPU. Long enough to dwarf timer
  * quantization and fixed query overhead, short enough that the CPU can always stay ahead
@@ -61,8 +65,25 @@ const STALL_MS = 5000;
 /** Above this p10–p90 spread, relative to the median, a result is too noisy to trust. */
 export const NOISE_THRESHOLD = 0.25;
 
-/** How many measured rounds each quality setting runs. */
-export const ROUND_PRESETS = { quick: 12, standard: 30, thorough: 90 } as const;
+/**
+ * How many measured rounds each quality setting runs.
+ *
+ * Measured on a desktop GPU, four repeats each, comparing how far the *ratio* between two
+ * pipelines moved between runs — the ratio being the number the table exists to report:
+ *
+ * | rounds | time | ratio spread | absolute ms |
+ * |--------|------|--------------|-------------|
+ * | 30     | 0.7s | 4.6%         | steady      |
+ * | 90     | 1.2s | 2.8%         | steady      |
+ * | 300    | 3.0s | 2.0%         | drifts up   |
+ *
+ * So 90 is the knee of the curve. Beyond it the GPU has been under load long enough to
+ * start throttling, and the absolute milliseconds climb run over run — more samples buy
+ * precision on a quantity that is itself moving. `extended` is offered anyway for when a
+ * genuinely small difference has to be resolved, and it is the ratio, not the absolute
+ * time, that is worth reading from it.
+ */
+export const ROUND_PRESETS = { quick: 12, standard: 30, thorough: 90, extended: 300 } as const;
 export type BenchmarkQuality = keyof typeof ROUND_PRESETS;
 
 export interface BenchmarkTarget {

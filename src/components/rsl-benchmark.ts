@@ -38,10 +38,11 @@ export class RslBenchmark extends LitElement {
       }
 
       dialog::backdrop {
-        /* fully opaque, and deliberately no backdrop-filter: the canvases keep rendering
-           underneath during a run, so anything translucent or blurred would have to be
-           recomposited every frame and would compete with what we are measuring */
-        background: #020403;
+        /* translucent, but deliberately no backdrop-filter: the canvases keep rendering
+           underneath during a run, and a blur of them would be recomputed every frame,
+           competing with the very thing being measured. Plain alpha compositing is cheap
+           enough not to matter. */
+        background: rgba(2, 4, 3, 0.55);
       }
 
       header {
@@ -223,7 +224,7 @@ export class RslBenchmark extends LitElement {
                   class="flag"
                   title="p10–p90 spread is over ${Math.round(
                     NOISE_THRESHOLD * 100
-                  )}% of the median — close other GPU-heavy tabs, or run Thorough"
+                  )}% of the median — close other GPU-heavy tabs, or take more samples"
                   >⚠</span
                 >`
               : nothing}
@@ -279,8 +280,10 @@ export class RslBenchmark extends LitElement {
                 <p class="hint">
                   Median GPU time per frame at ${this.note}, over
                   ${this.results[0]?.samples ?? 0} samples after warmup. <b>Perf.</b> is
-                  relative to the current pipeline, so half the speed reads 50%. Ranks
-                  pipelines on <em>this</em> GPU — not a prediction of handheld performance.
+                  relative to the current pipeline, so half the speed reads 50% — and it is
+                  the steadier figure, since the absolute milliseconds drift as the GPU
+                  warms and throttles. Ranks pipelines on <em>this</em> GPU — not a
+                  prediction of handheld performance.
                   ${dropped > 0
                     ? html`<br />${dropped} sample${dropped === 1 ? '' : 's'} discarded by the
                         driver.`
@@ -288,7 +291,7 @@ export class RslBenchmark extends LitElement {
                   ${noisy
                     ? html`<br /><span class="flag"
                           >⚠ Some results varied too much to trust — close other GPU-heavy tabs,
-                          or run Thorough.</span
+                          or take more samples.</span
                         >`
                     : nothing}
                 </p>
