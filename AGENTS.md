@@ -157,3 +157,15 @@ Every one of these cost time in the session that built this repo.
 | Deploy pipeline | `.github/workflows/deploy.yml` |
 | Owner's backlog (read-only) | `TODO` |
 | Device-side truth for any pipeline question | `~/projects/NextUI` (see the table above) |
+
+## Workflow
+
+- **Diagnose, don't guess.** Reproduce the problem and measure it before proposing a fix; a
+  plausible-sounding root cause that hasn't been observed is usually the wrong one.
+- **Verify in the browser before calling anything done** — measured outcomes, not assumptions, and
+  a console with nothing in it but Lit's dev-mode notice.
+- **Commit granularly**, conventional commits, one logical change each, and each commit should
+  typecheck on its own.
+- **Don't push unless asked.** A push to `main` deploys straight to production, so that call is the
+  owner's. Commit locally and stop there.
+- **Report concisely**, and say plainly what went wrong, what was skipped, or what remains uncertain.
