@@ -28,7 +28,7 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 ## Features
 
 - **1–3 shader passes** with the exact NextUI options: `filter`, `srctype`, `scaletype`, `upscale` (`1×`–`8×` or `screen`)
-- **25 stock shaders** copied from NextUI's `Shaders/glsl`, plus drag & drop of your own `.glsl`
+- **25 stock shaders** copied from NextUI's `Shaders/glsl`, plus **your own** added from a file or a URL
 - **25 stock NextUI presets** (`real-gameboy`, `crt-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
 - **Your own presets**, saved in the browser and listed above the stock ones, with rename, update and delete
 - **16 real game screenshots** at native resolution — 2 per platform, unfiltered, from libretro-thumbnails
@@ -40,6 +40,8 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
   drag-to-pan, and **PNG export at 1:1**
 - **Compare up to 3 pipelines** — the one you are editing against the raw source or any stock preset,
   in two layouts: a movable **overlay** divider, or **side-by-side** columns that pan together
+- **Sizable comparison frame** (e.g. `1200×400`) that the render is cropped into and dragged around,
+  exported at exactly that size, with optional labels burnt in
 - **Foldable panels** and collapsible side rails (`[` and `]`), down to an icon-only toolbar on narrow screens
 - **Pass inspector** showing every intermediate render with its computed `InputSize` / `TextureSize` / `OutputSize`
 - **Live `.cfg`** you can edit, download, or load back — unknown keys (core options like `gambatte_*`) are preserved
@@ -90,8 +92,25 @@ you are editing; the others show the raw source (the default) or any stock prese
 | **Overlay** | Panes are clipped by a movable divider (two dividers for 3 panes) so the result reads as a single image |
 | **Side by side** | Fixed equal columns, each showing the *same* region of the scene; dragging pans them all together |
 
-While comparing, **Export PNG 1:1** writes the comparison exactly as laid out, at the output
-resolution; **Current** exports just the edited pipeline.
+While comparing, **Export PNG 1:1** writes the comparison exactly as laid out; **Current** exports
+just the edited pipeline.
+
+#### Comparison frame
+
+The comparison has its own rectangle, set with **Frame** in the comparison bar and measured in
+export pixels. It defaults to the output resolution, and presets cover the shapes you usually want
+— `1200×400` and `1920×640` make wide side-by-side strips out of a 4:3 render.
+
+The render is **cropped inside that frame and dragged into place**, and the exported PNG is written
+at exactly the frame size, so what you arrange on screen is what you get. Zoom magnifies the content
+*inside* the frame rather than growing it, which is how you export a tight strip of a single detail.
+
+If the frame is bigger than the window it is displayed scaled down and a chip says so — only the
+display is approximate at that point, the export is still exact.
+
+**Labels** burns the pane names into the exported PNG (on by default). Pane A is named after the
+preset it was loaded from, so a comparison exported from one of your own presets carries that name
+rather than a generic "Current".
 
 **Benchmark** measures the real GPU cost of each pane with timer queries — not CPU time, which
 would measure almost nothing — and reports the median GPU time per frame, a robust deviation and
@@ -142,8 +161,21 @@ them, so they match what the handheld displays.
 
 ### Adding your own shader
 
-Drag a `.glsl` file anywhere onto the page, or drop it in `public/shaders/glsl/` and re-run `npm run dev`.
-Custom shaders dropped in the browser are kept in `localStorage`.
+Open the **Shaders** tab in the right dock. You can drop a `.glsl` file on it, pick one from disk,
+or fetch one from a URL. Anything you add is kept in `localStorage`, appears in every pass dropdown
+(there is an **＋ Add shader…** shortcut there too) and can be deleted from the same tab.
+
+A shader is compiled before it is stored, so a broken one is reported with its compile log instead
+of silently rendering as an empty pass. Names are always normalised to `.glsl` and can never shadow
+a bundled shader — presets reference shaders by file name, so a custom `crt-perfect-v4.glsl` would
+otherwise change what every stock preset renders; collisions get a `-2` suffix instead.
+
+> [!NOTE]
+> Loading from a URL is an ordinary browser `fetch`, so it only works if the server sends CORS
+> headers. Raw GitHub links and CDNs do; most plain web servers do not. There is no way around that
+> without a server to proxy through, so for anything else download the file and add it from disk.
+
+To ship a shader with the project instead, drop it in `public/shaders/glsl/` and re-run `npm run dev`.
 
 ## How it works
 

@@ -88,11 +88,30 @@ Ported in `src/core/pipeline.ts` + `glsl-preprocess.ts` + `scaling.ts`. These ar
   `pragma-params`, `scaling`, `cfg` (minarch reader/writer), `preset-config`, `user-presets`,
   `shader-library`, `test-patterns`, `state` (store singleton + localStorage).
 - `src/components/` — Lit elements, all `rsl-*`: `app` (owns pipelines and orchestration),
-  `viewport` (canvases, zoom/pan, comparison layouts, export), `source-panel`, `pipeline-panel`,
-  `dock` (cfg / passes / log tabs), `shared-styles`.
+  `viewport` (canvases, zoom/pan, comparison frame, export), `source-panel`, `pipeline-panel`,
+  `dock` (cfg / passes / shaders / log tabs), `benchmark`, `shared-styles`.
 - Up to 3 WebGL contexts, one per comparison pane; pane 0 is the pipeline being edited.
 - localStorage keys: `retroshader-lab:state`, `:custom-shaders`, `:user-presets`. `state.restore()`
   migrates old shapes — add a fallback there rather than breaking saved sessions.
+
+### The comparison frame
+
+While comparing, the panes divide a rectangle measured in **export pixels** (`compareWidth` ×
+`compareHeight`, `0` meaning "follow the output resolution"), not the browser window.
+
+- **Panning is clamped against the frame, never against the stage.** This is the whole point: it is
+  what makes the exported PNG match the screen. It used to clamp against `stage.clientWidth`, so the
+  pannable range moved when the window was resized and the export agreed only by coincidence.
+- `exportComposite()` deliberately repeats the screen's arithmetic rather than inverting it into
+  source rectangles. If you change one, change the other — a unit check that both place the render
+  identically across modes, pane counts, frame sizes, zooms and pans is cheap to write and catches
+  this immediately.
+- `zoom` magnifies content *inside* the frame; it does not resize it. `displayScale` is a
+  screen-only shrink capped at 1, and must never reach the export.
+- Custom shaders are validated by compiling them before they are stored, because `render()` silently
+  skips a pass whose shader is not cached — an invalid shader would look like an empty pass.
+- Shader URLs are a plain `fetch` and so bound by CORS; it cannot be proxied without a server. Say
+  so in the error rather than reporting a generic failure.
 
 ## Verifying in the browser
 
@@ -108,7 +127,9 @@ app.appState; app.pipelines; app.userPresets; app.source;   // all readable
 
 Useful events: `preset-load|save|rename|update|delete`, `cfg-import`, `pass-add|remove|move|change`,
 `pass-param`, `source-system|pattern|sample|file`, `output-size`, `scaling`, `view-change`,
-`compare-change`, `pane-change`, `export-png`, `toggle-panel`. Keyboard: `[` / `]` toggle the rails.
+`compare-change` (also carries `compareWidth|compareHeight|exportLabels`), `pane-change`,
+`shader-add-file|shader-add-url|shader-delete`, `export-png`, `toggle-panel`. Keyboard: `[` / `]`
+toggle the rails.
 
 - Console should contain **only** Lit's dev-mode notice. Anything else is a regression.
 - Chrome will not resize below ~500px wide; `resize_page` clamps silently.
@@ -169,7 +190,11 @@ Every one of these cost time in the session that built this repo.
 - **Derive comparison panes from live state**, not a cached config snapshot, or a raw pane silently
   stops following edits.
 - **Separate user-action messages from per-render output.** Import/preset warnings were written to
-  the same field the render loop overwrites every frame, so they vanished before being read.
+  the same field the render loop overwrites every frame, so they vanished before being read. The
+  same applies across tabs: a result belongs next to the control that caused it, since the log is
+  somewhere the user is not looking.
+- **`.silk` does not exist** — the silkscreen label class is `.label`, and it is `display: block`,
+  so inline uses in a toolbar need an explicit override. Grep before inventing a class name.
 - **`TODO` is the owner's file**, marked "for human draft, not for AI agents". Never edit it.
 - **Validate anything pulled from libretro-thumbnails**: some entries are upscaled (Symphony of the
   Night is 512×332) and some are not PNG despite the extension (FF7 disc 1). Check the magic bytes
