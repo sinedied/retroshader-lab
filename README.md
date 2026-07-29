@@ -125,9 +125,9 @@ source texture ──▶ pass 1 (FBO) ──▶ pass 2 (FBO) ──▶ pass 3 (F
 | --- | --- | --- | --- |
 | `source` | original source size | original source size | `last × scale` |
 | `relative` | previous pass output | previous pass output | `last × scale` |
-| `viewport`¹ | destination rect | destination rect | destination rect when `upscale = screen` |
 
-¹ `viewport` exists in the engine but is not exposed by NextUI's menu — enable **Advanced** to use it.
+The engine also understands a third value, `viewport` (the destination rect), which the cfg reader
+accepts but the UI does not offer — NextUI's own menu does not expose it either.
 
 **Uniforms** set on every pass: `MVPMatrix` (identity), `FrameDirection` (1), `FrameCount`, `OutputSize`,
 `TextureSize`, `InputSize`, `OrigTextureSize`, `OrigInputSize`, `texelSize` (`1/TextureSize`), `Texture`

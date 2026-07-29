@@ -65,7 +65,8 @@ Ported in `src/core/pipeline.ts` + `glsl-preprocess.ts` + `scaling.ts`. These ar
 - `upscale` is stored as `optionIndex + 1`, so `screen` = **9**, which means "render at the
   destination rect size".
 - `srctype` / `scaletype`: `0` = source (original), `1` = relative (previous pass output),
-  `2` = viewport (dst_rect). NextUI's menu only exposes 0 and 1; 2 is behind **Advanced**.
+  `2` = viewport (dst_rect). Only 0 and 1 are offered in the UI, matching NextUI's menu; 2 stays in
+  the type and the cfg reader so an exotic file still loads.
 - A pass's target texture is created with the **next** pass's filter; the source texture uses
   pass 1's filter. This is what makes NEAREST/LINEAR chains match the device.
 - Uniforms per pass: `MVPMatrix` (identity), `FrameDirection` (1), `FrameCount`, `OutputSize`,

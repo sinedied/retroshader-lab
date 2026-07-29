@@ -1,8 +1,8 @@
 import { LitElement, html, css, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { panelStyles } from './shared-styles.js';
 import { FILTERS, SCALE_TYPES, UPSCALES } from '../core/types.js';
-import type { PassConfig, PassSizes, ShaderParam } from '../core/types.js';
+import type { PassConfig, PassSizes, ScaleTypeName, ShaderParam } from '../core/types.js';
 import {
   defaultValue,
   formatParamValue,
@@ -132,10 +132,17 @@ export class RslPipelinePanel extends LitElement {
   @property({ attribute: false }) paramsByShader: Map<string, ShaderParam[]> = new Map();
   @property({ attribute: false }) collapsed: Record<string, boolean> = {};
 
-  @state() private showAdvanced = false;
-
   private emit<T>(type: string, detail: T): void {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+  }
+
+  /**
+   * Options for the source/texture type selects: the two NextUI offers, plus the pass's
+   * own value when a hand-written cfg used the engine-only `viewport`, so the select
+   * never claims a value the pass does not have.
+   */
+  private typeOptions(current: ScaleTypeName): ScaleTypeName[] {
+    return SCALE_TYPES.includes(current) ? SCALE_TYPES : [...SCALE_TYPES, current];
   }
 
   /** Fold toggle shown in a module or pass header. */
@@ -301,7 +308,7 @@ export class RslPipelinePanel extends LitElement {
                     patch: { srctype: (e.target as HTMLSelectElement).value }
                   })}
               >
-                ${SCALE_TYPES.filter((t) => this.showAdvanced || t !== 'viewport').map(
+                ${this.typeOptions(pass.srctype).map(
                   (type) => html`
                     <option value=${type} ?selected=${type === pass.srctype}>${type}</option>
                   `
@@ -319,7 +326,7 @@ export class RslPipelinePanel extends LitElement {
                     patch: { scaletype: (e.target as HTMLSelectElement).value }
                   })}
               >
-                ${SCALE_TYPES.filter((t) => this.showAdvanced || t !== 'viewport').map(
+                ${this.typeOptions(pass.scaletype).map(
                   (type) => html`
                     <option value=${type} ?selected=${type === pass.scaletype}>${type}</option>
                   `
@@ -373,14 +380,6 @@ export class RslPipelinePanel extends LitElement {
               @click=${() => this.emit('pass-add', undefined)}
             >
               + Add pass
-            </button>
-            <button
-              class="ghost"
-              aria-pressed=${this.showAdvanced}
-              title="Expose the engine-only 'viewport' source/texture type"
-              @click=${() => (this.showAdvanced = !this.showAdvanced)}
-            >
-              ${this.showAdvanced ? '▣' : '▢'} Advanced
             </button>
           </div>
           <p class="hint">

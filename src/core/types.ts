@@ -5,8 +5,9 @@ export type FilterName = 'NEAREST' | 'LINEAR';
 
 /**
  * `minarch_shaderN_srctype` / `minarch_shaderN_scaletype`.
- * NextUI's menu only exposes `source` and `relative`; the engine also understands a
- * third value (index 2 = viewport) which the lab supports internally.
+ * The engine also understands a third value (index 2 = viewport); it stays in the type
+ * and in the cfg reader so an exotic file still loads, but it is not offered in the UI
+ * because NextUI does not offer it either.
  */
 export type ScaleTypeName = 'source' | 'relative' | 'viewport';
 
@@ -17,7 +18,8 @@ export type UpscaleName = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | 'scree
 export type ScalingMode = 'Native' | 'Aspect' | 'Aspect (screen)' | 'Fullscreen' | 'Cropped';
 
 export const FILTERS: FilterName[] = ['NEAREST', 'LINEAR'];
-export const SCALE_TYPES: ScaleTypeName[] = ['source', 'relative', 'viewport'];
+/** Values offered in the UI — the same two NextUI's menu exposes. */
+export const SCALE_TYPES: ScaleTypeName[] = ['source', 'relative'];
 export const UPSCALES: UpscaleName[] = ['1', '2', '3', '4', '5', '6', '7', '8', 'screen'];
 export const SCALING_MODES: ScalingMode[] = [
   'Native',
