@@ -41,8 +41,8 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
   drag-to-pan, and **PNG export at 1:1**
 - **Compare up to 3 pipelines** — the one you are editing against the raw source or any stock preset,
   in two layouts: a movable **overlay** divider, or **side-by-side** columns that pan together
-- **Sizable comparison frame** (e.g. `1200×400`) that the render is cropped into and dragged around,
-  exported at exactly that size, with optional labels burnt in
+- **Sizable comparison frame** (e.g. `1280×480`) that the render is cropped into and dragged around,
+  never scaled down, exported at exactly that size, with optional labels
 - **Foldable panels** and collapsible side rails (`[` and `]`), down to an icon-only toolbar on narrow screens
 - **Pass inspector** showing every intermediate render with its computed `InputSize` / `TextureSize` / `OutputSize`
 - **Live `.cfg`** you can edit, download, or load back — unknown keys (core options like `gambatte_*`) are preserved
@@ -100,19 +100,21 @@ just the edited pipeline.
 #### Comparison frame
 
 The comparison has its own rectangle, set with **Frame** in the comparison bar and measured in
-export pixels. It defaults to the output resolution, and presets cover the shapes you usually want
-— `1200×400` and `1920×640` make wide side-by-side strips out of a 4:3 render.
+export pixels. The presets follow your output resolution — the full size, half its height, half its
+width — plus `1280×480` and `800×400` as fixed wide strips.
 
 The render is **cropped inside that frame and dragged into place**, and the exported PNG is written
 at exactly the frame size, so what you arrange on screen is what you get. Zoom magnifies the content
 *inside* the frame rather than growing it, which is how you export a tight strip of a single detail.
 
-If the frame is bigger than the window it is displayed scaled down and a chip says so — only the
-display is approximate at that point, the export is still exact.
+**The frame is never scaled down to fit the window** — scaling it would resample the very pixels you
+are trying to inspect. A frame larger than the window scrolls instead, so one screen pixel is always
+one export pixel. Dragging pans the render inside the frame; the wheel and the scrollbars move the
+window over it.
 
-**Labels** burns the pane names into the exported PNG (on by default). Pane A is named after the
-preset it was loaded from, so a comparison exported from one of your own presets carries that name
-rather than a generic "Current".
+**Labels** shows the pane names, in the preview and in the exported PNG alike (on by default). Pane
+A is named after the preset it was loaded from, so a comparison exported from one of your own
+presets carries that name rather than a generic "Current".
 
 **Benchmark** measures the real GPU cost of each pane with timer queries — not CPU time, which
 would measure almost nothing — and reports the median GPU time per frame, a robust deviation and

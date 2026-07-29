@@ -139,15 +139,25 @@ While comparing, the panes divide a rectangle measured in **export pixels** (`co
 - **Panning is clamped against the frame, never against the stage.** This is the whole point: it is
   what makes the exported PNG match the screen. It used to clamp against `stage.clientWidth`, so the
   pannable range moved when the window was resized and the export agreed only by coincidence.
-- **Re-clamp whenever the window a pane shows changes**, not just on drag and zoom. Dragging to the
-  edge of a narrow frame and then widening it left the pan at its old limit and opened a 253px black
-  gap. `updated()` watches frame size, compare mode, pane count and output size.
+- **Re-clamp whenever the window a pane shows changes**, and whenever the pan itself does. Dragging
+  to the edge of a narrow frame and then widening it left the pan at its old limit and opened a
+  253px black gap. `updated()` watches frame size, compare mode, pane count, output size, zoom and
+  pan — the last because a pan can arrive from a shared link or a restored session without ever
+  passing through the drag handler.
 - `exportComposite()` deliberately repeats the screen's arithmetic rather than inverting it into
   source rectangles. If you change one, change the other — a unit check that both place the render
   identically across modes, pane counts, frame sizes, zooms and pans is cheap to write and catches
   this immediately.
-- `zoom` magnifies content *inside* the frame; it does not resize it. `displayScale` is a
-  screen-only shrink capped at 1, and must never reach the export.
+- **The frame is never scaled down for display.** Shrinking it resamples the pixels the lab exists
+  to inspect, so an oversized frame scrolls the stage instead and one screen pixel is one export
+  pixel. There is deliberately no `displayScale` any more. Centring the frame needs **`safe`**
+  centring: plain `place-items: center` puts the start edge out of reach once the child overflows.
+- `zoom` magnifies content *inside* the frame; it does not resize it.
+- **Labels are what-you-see-is-what-you-export**: `exportLabels` drives the preview and the PNG
+  together. It used to affect only the export, which made the toggle look broken.
+- **A toolbar toggle outside a `.seg` gets no pressed styling** — that rule is
+  `.seg button[aria-pressed='true']`. Use `.toggle`, or the button changes state invisibly, which
+  reads as a dead control.
 - Custom shaders are validated by compiling them before they are stored, because `render()` silently
   skips a pass whose shader is not cached — an invalid shader would look like an empty pass.
 - Shader URLs are a plain `fetch` and so bound by CORS; it cannot be proxied without a server. Say
