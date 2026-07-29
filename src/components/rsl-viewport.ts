@@ -17,13 +17,10 @@ const LABEL_COLORS = [
 /** Mirrors `--font-display` so a burnt-in label matches the on-screen one. */
 const LABEL_FONT = "'Archivo', 'Helvetica Neue', sans-serif";
 
-/** Handy comparison shapes: wide strips for side-by-side, plus common capture sizes. */
-const FRAME_PRESETS: [number, number][] = [
-  [1200, 400],
-  [1920, 640],
-  [1280, 720],
-  [1920, 1080],
-  [1024, 768]
+/** Fixed comparison shapes, offered alongside ones derived from the output size. */
+const FIXED_FRAME_PRESETS: [number, number][] = [
+  [1280, 480],
+  [800, 400]
 ];
 
 /**
@@ -159,7 +156,14 @@ export class RslViewport extends LitElement {
         flex: 1 1 auto;
         /* never let the preview be squeezed to nothing by wrapping toolbars */
         min-height: 180px;
-        overflow: hidden;
+        /* The comparison frame is never scaled down to fit — scaling it would resample the
+           pixels this lab exists to inspect — so an oversized frame scrolls instead.
+           The "safe" keyword matters: plain centring puts the start edge out of reach
+           once the child is larger than the container. */
+        overflow: auto;
+        display: grid;
+        justify-items: safe center;
+        align-items: safe center;
         background-color: #020403;
         background-image: linear-gradient(45deg, #0a0f0d 25%, transparent 25%),
           linear-gradient(-45deg, #0a0f0d 25%, transparent 25%),
@@ -177,14 +181,11 @@ export class RslViewport extends LitElement {
 
       /**
        * The comparison frame: the rectangle the panes divide, and exactly what the
-       * composite export writes. Sized in export pixels, then scaled down only if it
-       * cannot fit the stage.
+       * composite export writes. Always at its true size in export pixels, so a screen
+       * pixel is an export pixel.
        */
       .frame {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
+        position: relative;
         overflow: hidden;
         background: #000;
         box-shadow: 0 0 0 1px var(--line-strong), 0 28px 70px -40px rgba(125, 255, 155, 0.5);
@@ -288,6 +289,7 @@ export class RslViewport extends LitElement {
   @property({ attribute: false }) dividers: number[] = [0.5];
   @property({ type: Number }) compareWidth = 0;
   @property({ type: Number }) compareHeight = 0;
+  /** Burn the pane labels into the preview and the exported comparison PNG. */
   @property({ type: Boolean }) exportLabels = true;
   /** Pane labels resolved by the app, which knows the saved preset names. */
   @property({ attribute: false }) labels: string[] = [];
@@ -352,13 +354,6 @@ export class RslViewport extends LitElement {
    * How much the frame is shrunk purely to fit on screen. Capped at 1 so the frame is
    * pixel-exact whenever it fits, and the export never depends on the window size.
    */
-  private get displayScale(): number {
-    if (!this.framed) return 1;
-    const availableW = Math.max(64, (this.stage?.clientWidth ?? this.frameW) - STAGE_PADDING);
-    const availableH = Math.max(64, (this.stage?.clientHeight ?? this.frameH) - STAGE_PADDING);
-    return Math.min(1, availableW / this.frameW, availableH / this.frameH);
-  }
-
   /** Width of the window a single pane shows, in frame pixels. */
   private get paneWindowW(): number {
     return this.compareMode === 'side-by-side' ? this.frameW / this.visiblePanes : this.frameW;
@@ -419,13 +414,15 @@ export class RslViewport extends LitElement {
       changed.has('compareMode') ||
       changed.has('paneCount');
 
-    if (geometryChanged) {
+    if (geometryChanged) requestAnimationFrame(() => this.updateFitScale());
+
+    // Anything that resizes the window a pane shows can leave an existing pan out of
+    // range — dragging to the edge of a narrow frame and then widening it used to leave
+    // the render short of its column, as a black gap on screen and in the export. `pan`
+    // is watched too because it can arrive from outside the drag handler, from a shared
+    // link or a restored session, without ever having passed through the clamp.
+    if (geometryChanged || changed.has('pan') || changed.has('zoom') || changed.has('viewMode')) {
       requestAnimationFrame(() => {
-        this.updateFitScale();
-        // Anything that resizes the window a pane shows can leave an existing pan out of
-        // range — dragging to the edge of a narrow frame and then widening it used to
-        // leave the render short of its column, as a black gap on screen and in the
-        // export. The clamp only ran on drag and zoom, so nothing re-checked it.
         const clamped = this.clampPan(this.pan);
         if (Math.abs(clamped.x - this.pan.x) > 0.01 || Math.abs(clamped.y - this.pan.y) > 0.01) {
           this.emit('view-change', { pan: clamped });
@@ -489,14 +486,13 @@ export class RslViewport extends LitElement {
     const startX = event.clientX;
     const startY = event.clientY;
     const origin = { ...this.pan };
-    // pointer deltas are CSS pixels; pan is frame pixels while the frame is shown scaled
-    const ds = this.displayScale || 1;
     this.grabbing = true;
     const move = (e: PointerEvent) => {
+      // pointer deltas are CSS pixels, and so is the pan: nothing is scaled for display
       this.emit('view-change', {
         pan: this.clampPan({
-          x: origin.x + (e.clientX - startX) / ds,
-          y: origin.y + (e.clientY - startY) / ds
+          x: origin.x + (e.clientX - startX),
+          y: origin.y + (e.clientY - startY)
         })
       });
     };
@@ -558,22 +554,22 @@ export class RslViewport extends LitElement {
     return `left:0;width:100%${clip}`;
   }
 
-  /** The scene is centred inside its own layer, then offset by the shared pan. */
+  /**
+   * The scene is centred inside its own layer, then offset by the shared pan.
+   *
+   * There is no display scaling: the frame is always at its true size, so a CSS pixel here
+   * is an export pixel and this arithmetic is the same the composite export performs.
+   */
   private canvasStyle(): string {
-    // pan is in frame pixels while comparing, so it scales with the frame on screen
-    const ds = this.displayScale;
-    const scale = this.scale * ds;
+    const scale = this.scale;
     const w = Math.round(this.width * scale);
     const h = Math.round(this.height * scale);
-    const x = this.pan.x * ds;
-    const y = this.pan.y * ds;
-    return `width:${w}px;height:${h}px;left:calc(50% - ${w / 2}px + ${x}px);top:calc(50% - ${h / 2}px + ${y}px)`;
+    return `width:${w}px;height:${h}px;left:calc(50% - ${w / 2}px + ${this.pan.x}px);top:calc(50% - ${h / 2}px + ${this.pan.y}px)`;
   }
 
-  /** The frame itself, in CSS pixels. */
+  /** The frame at its true size in export pixels; an oversized one scrolls the stage. */
   private frameStyle(): string {
-    const ds = this.displayScale;
-    return `width:${Math.round(this.frameW * ds)}px;height:${Math.round(this.frameH * ds)}px`;
+    return `width:${Math.round(this.frameW)}px;height:${Math.round(this.frameH)}px`;
   }
 
   private labelStyle(index: number): string {
@@ -817,12 +813,46 @@ export class RslViewport extends LitElement {
   }
 
   /**
+   * The frame sizes offered in the picker. The first three follow the output resolution,
+   * so halving a dimension stays meaningful when the output changes.
+   */
+  private get framePresets(): { value: string; label: string; w: number; h: number }[] {
+    const w = this.width;
+    const h = this.height;
+    const derived: [string, number, number][] = [
+      ['Output', w, h],
+      ['Half height', w, Math.max(16, Math.round(h / 2))],
+      ['Half width', Math.max(16, Math.round(w / 2)), h]
+    ];
+    return [
+      ...derived.map(([name, pw, ph]) => ({
+        value: `${pw}x${ph}`,
+        label: `${name} (${pw}×${ph})`,
+        w: pw,
+        h: ph
+      })),
+      ...FIXED_FRAME_PRESETS.map(([pw, ph]) => ({
+        value: `${pw}x${ph}`,
+        label: `${pw}×${ph}`,
+        w: pw,
+        h: ph
+      }))
+    ];
+  }
+
+  /**
    * Frame size and label controls. The size is what the composite PNG is written at, and
    * what the panes divide on screen, so the two cannot drift apart.
    */
   private renderFrameControls() {
-    const presets = FRAME_PRESETS.map(([w, h]) => `${w}×${h}`);
-    const current = `${this.frameW}×${this.frameH}`;
+    const presets = this.framePresets;
+    // "Output" is also what an unset frame means, so it must read as selected then too
+    const isOutput = this.compareWidth === 0 && this.compareHeight === 0;
+    const matched = presets.find(
+      (preset, index) =>
+        (index === 0 && isOutput) ||
+        (!isOutput && preset.w === this.frameW && preset.h === this.frameH)
+    );
     return html`
       <div class="frame-pick">
         <span class="label inline">Frame</span>
@@ -831,21 +861,18 @@ export class RslViewport extends LitElement {
           title="Size of the comparison, and of the exported PNG"
           @change=${(e: Event) => this.onFramePreset((e.target as HTMLSelectElement).value)}
         >
-          <option value="output" ?selected=${this.compareWidth === 0 && this.compareHeight === 0}>
-            Output (${this.width}×${this.height})
-          </option>
-          ${FRAME_PRESETS.map(
-            ([w, h], i) => html`
+          ${presets.map(
+            (preset, index) => html`
               <option
-                value=${`${w}x${h}`}
-                ?selected=${this.compareWidth === w && this.compareHeight === h}
+                value=${index === 0 ? 'output' : preset.value}
+                ?selected=${matched === preset}
               >
-                ${presets[i]}
+                ${preset.label}
               </option>
             `
           )}
-          ${!presets.includes(current) && this.compareWidth > 0
-            ? html`<option value="custom" selected>${current}</option>`
+          ${matched === undefined
+            ? html`<option value="custom" selected>${this.frameW}×${this.frameH}</option>`
             : nothing}
         </select>
         <input
@@ -872,13 +899,13 @@ export class RslViewport extends LitElement {
             this.onFrameSize(this.frameW, Number((e.target as HTMLInputElement).value))}
         />
         <button
-          class="ghost"
+          class="ghost toggle"
           aria-pressed=${this.exportLabels}
-          aria-label="Include labels in the export"
-          title="Burn the pane labels into the exported PNG"
+          aria-label="Show pane labels"
+          title="Show the pane labels, in the preview and in the exported PNG"
           @click=${() => this.emit('compare-change', { exportLabels: !this.exportLabels })}
         >
-          🏷<span class="btn-label">Labels</span>
+          ◰<span class="btn-label">Labels</span>
         </button>
       </div>
     `;
@@ -997,7 +1024,7 @@ export class RslViewport extends LitElement {
             </div>
           `
         )}
-        ${comparing
+        ${comparing && this.exportLabels
           ? [0, 1, 2]
               .slice(0, panes)
               .map(
@@ -1038,13 +1065,6 @@ export class RslViewport extends LitElement {
           : nothing}
         ${comparing
           ? html`<span class="chip">Frame <b>${this.frameW}×${this.frameH}</b></span>`
-          : nothing}
-        ${comparing && this.displayScale < 0.999
-          ? html`<span
-              class="chip warn"
-              title="The frame is larger than the window, so it is shown scaled down. The exported PNG is still exact."
-              >Shown at <b>${(this.displayScale * 100).toFixed(0)}%</b></span
-            >`
           : nothing}
         <span class="spacer"></span>
         <span class="chip">Render <b>${this.renderMs.toFixed(1)} ms</b></span>
