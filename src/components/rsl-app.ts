@@ -404,6 +404,17 @@ export class RslApp extends LitElement {
     this.warnings = mainResult.warnings;
   }
 
+  /** Puts every parameter of a pass back to the value its shader declares. */
+  private resetPassParams(index: number): void {
+    const pass = store.value.pipeline.passes[index];
+    if (!pass) return;
+    const params: Record<string, number> = {};
+    for (const param of this.library.paramsOf(pass.shader).filter(isConfigurable)) {
+      params[param.name] = defaultValue(param);
+    }
+    store.updatePass(index, { params });
+  }
+
   /** Ensures a pass carries the default values of its shader's parameters. */
   private withDefaults(pass: PassConfig): PassConfig {
     const params: Record<string, number> = {};
@@ -676,6 +687,7 @@ export class RslApp extends LitElement {
             }}
             @pass-param=${(e: CustomEvent<{ index: number; name: string; value: number }>) =>
               store.setPassParam(e.detail.index, e.detail.name, e.detail.value)}
+            @pass-params-reset=${(e: CustomEvent<number>) => this.resetPassParams(e.detail)}
           ></rsl-pipeline-panel>
 
           <p class="footer-note">

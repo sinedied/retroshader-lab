@@ -79,6 +79,21 @@ export class RslPipelinePanel extends LitElement {
         gap: 7px;
       }
 
+      .params-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .params-head .label {
+        margin-bottom: 0;
+      }
+
+      .params-head button {
+        padding: 3px 7px;
+      }
+
       .param-head {
         display: flex;
         align-items: baseline;
@@ -134,6 +149,16 @@ export class RslPipelinePanel extends LitElement {
 
   private emit<T>(type: string, detail: T): void {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+  }
+
+  /** True when at least one of the pass's parameters differs from its declared default. */
+  private hasModifiedParams(pass: PassConfig): boolean {
+    return (this.paramsByShader.get(pass.shader) ?? [])
+      .filter(isConfigurable)
+      .some((param) => {
+        const value = pass.params[param.name];
+        return value !== undefined && Math.abs(value - defaultValue(param)) > 0.0001;
+      });
   }
 
   /**
@@ -347,6 +372,17 @@ export class RslPipelinePanel extends LitElement {
           ${params.length > 0
             ? html`
                 <div class="params">
+                  <div class="params-head">
+                    <span class="label">Parameters</span>
+                    <button
+                      class="ghost"
+                      ?disabled=${!this.hasModifiedParams(pass)}
+                      title="Reset every parameter of this pass to the shader's default"
+                      @click=${() => this.emit('pass-params-reset', index)}
+                    >
+                      ↺<span class="btn-label">Reset</span>
+                    </button>
+                  </div>
                   ${params.map((param) => this.renderParam(index, pass, param))}
                 </div>
               `
