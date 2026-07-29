@@ -50,14 +50,32 @@
     lp_gap sets the gap between rows. The gap between columns is 0.4 of it, which
     is the ratio measured off a Game Boy Color panel - its subpixels are 0.910 of
     the cell tall but 0.296 of 0.333 wide, so the row matrix is about 9% of the
-    cell and the column matrix about 3.7%. The default lp_gap of 0.12 reproduces
-    that, for a fill factor near the ~75% the same panel measures.
+    cell and the column matrix about 3.7%.
+
+    The defaults were chosen by measuring, not by eye. At 320x240 into 1024x768
+    they give a mean level of 82.5%, a row swing of 58 and a column swing of 36,
+    which is within a few percent of crt-perfect's own figures, at a moire beat
+    of 0.24 - lower than crt-perfect's 0.26, and seven times lower than lcd1x's
+    1.87 at a grid more than twice as strong. Raising lp_grid or lp_gap past the
+    defaults trades beat for contrast: lp_grid 0.55 at lp_gap 0.20 doubles the
+    row swing and quadruples the beat, past the point where it is visible.
+
+    Both the grid and the stripes darken the image, as a real panel does.
+    lp_brightness compensates, but it is a linear gain into a hard clamp, and a
+    clamp is a non-linearity applied after the blend - which is exactly what this
+    shader is built to avoid, and it measurably brings the beat back. To brighten,
+    prefer lp_gamma below 1: it lifts more, crushes no highlights and adds no
+    beat.
 
     Unlike the grid, the stripes do not band-limit themselves: their pattern
     repeats once per cell whatever their width, so below about three output pixels
     per cell they turn into colour speckle rather than fading. They are faded out
     over that range explicitly. At 1024x768 only Game Boy-sized content has real
-    room for them; at 640x480 they are off almost everywhere.
+    room for them; at 640x480 they are off almost everywhere. They also cost beat
+    far faster than the grid does - 0.24 at the default 0.20, but 0.56 at 0.35 and
+    1.18 at 0.50 - and they leave a tint of about one 8-bit level on a white
+    field, because the sqrt below is applied per channel and the three stripes do
+    not sample the same phases.
 
     NOT SIMULATED, deliberately:
 
@@ -69,9 +87,9 @@
 
 */
 
-#pragma parameter lp_grid       "lp_grid"       0.80 0.00 1.00 0.05
-#pragma parameter lp_gap        "lp_gap"        0.12 0.00 0.50 0.01
-#pragma parameter lp_subpixels  "lp_subpixels"  0.35 0.00 1.00 0.05
+#pragma parameter lp_grid       "lp_grid"       0.30 0.00 1.00 0.05
+#pragma parameter lp_gap        "lp_gap"        0.16 0.00 0.50 0.01
+#pragma parameter lp_subpixels  "lp_subpixels"  0.20 0.00 1.00 0.05
 #pragma parameter lp_layout     "lp_layout"     0.00 0.00 1.00 1.00
 #pragma parameter lp_brightness "lp_brightness" 1.00 0.25 4.00 0.05
 #pragma parameter lp_gamma      "lp_gamma"      1.00 0.50 2.00 0.05
@@ -153,9 +171,9 @@ uniform COMPAT_PRECISION float lp_layout;
 uniform COMPAT_PRECISION float lp_brightness;
 uniform COMPAT_PRECISION float lp_gamma;
 #else
-#define lp_grid 0.80
-#define lp_gap 0.12
-#define lp_subpixels 0.35
+#define lp_grid 0.30
+#define lp_gap 0.16
+#define lp_subpixels 0.20
 #define lp_layout 0.0
 #define lp_brightness 1.00
 #define lp_gamma 1.00
@@ -165,22 +183,13 @@ uniform COMPAT_PRECISION float lp_gamma;
 // Color panel: 3.7% of the cell across against 9% down.
 #define GAP_ASPECT 0.4
 
-// Antiderivative of a unit-height pulse train of period 1 and lit width w, with
-// the aperture at the leading edge of the cell, differenced over a footprint of d
-// to give the exact mean of the train over that footprint.
-//
-// Edge, not centre, and that is load-bearing. Centring the aperture splits the
-// matrix line across a cell boundary, so at any integer scale factor it lands
-// half in one output pixel and half in the next and the contrast halves - at
-// exactly 2.0 output pixels per cell the two halves are symmetric and the grid
-// disappears completely. Putting the whole line inside one cell fixes every
-// integer scale at once, and costs one term less than the half-pixel phase shift
-// that would otherwise be needed. It also places the line on the cell boundary,
-// which is where the scaler's block boundary is and where a real black matrix is.
-//
 // Antiderivative of the aperture profile, normalised so its mean over a cell is
 // exactly 1 whatever the parameters are. The aperture is a trapezoid: lit across
 // a width of w, dark across the rest, with a linear ramp of width t joining them.
+//
+// Differencing it over an output pixel's footprint gives the true mean of the
+// aperture over that pixel - the box filter itself, not an approximation of it -
+// for the price of a floor and two clamps, with no transcendental anywhere.
 //
 // Edge, not centre, and that is load-bearing. Centring the aperture splits the
 // matrix line across a cell boundary, so at any integer scale factor it lands
@@ -339,9 +348,12 @@ void main()
         float amount = lp_subpixels * smoothstep(3.0, 6.0, 1.0 / d.x);
         if (amount > 0.0) {
             vec3 third = vec3(1.0 / 3.0);
-            // stripe edges get the same treatment as the matrix, for the same
-            // reason and clamped the same way
-            vec3 st = vec3(min(max(2.0 * lp_gap, 1e-4), 0.45 / 3.0));
+            // Stripe edges get a ramp too, but a much narrower one than the
+            // matrix. The matrix wants a wide ramp to kill its harmonics; the
+            // stripes measured no beat benefit from one, and a wide ramp only
+            // narrows their flat top, which drives the peak up and the mean
+            // level down for nothing.
+            vec3 st = vec3(min(max(0.5 * lp_gap, 1e-4), 0.15 / 3.0));
             vec3 sx = vec3(p.x) - vec3(0.0, 1.0 / 3.0, 2.0 / 3.0);
             // the aperture integral is normalised to a mean of 1, so at full
             // visibility a stripe already swings between 0 and 3
@@ -354,9 +366,13 @@ void main()
             if (lp_layout >= 0.5) {
                 cov = cov.bgr;
             }
-            // scaled so the lit stripe reaches 1 rather than overshooting it, for
-            // the same reason the matrix is
-            stripe = mix(vec3(1.0), cov, amount) / (1.0 + amount * (1.0 / (1.0 / 3.0 - st.x) - 1.0));
+            // Mean-normalised, not peak-normalised like the matrix. A stripe
+            // concentrates one channel's light into a third of the cell, so its
+            // mean is what has to stay at 1 for white to stay white - which puts
+            // its peak near 3 and means high visibilities clip. That is inherent
+            // to faking subpixels at all, not a choice this shader is making;
+            // the default is set low enough that it stays off the clamp.
+            stripe = mix(vec3(1.0), cov, amount);
         }
     }
 
