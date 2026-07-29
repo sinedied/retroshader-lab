@@ -376,7 +376,7 @@ export class RslViewport extends LitElement {
 
   /** Label shown over a pane: pane 0 is always the pipeline being edited. */
   private labelFor(index: number): string {
-    if (index === 0) return 'EDITED';
+    if (index === 0) return 'CURRENT';
     return paneLabel(this.panes[index - 1]?.preset);
   }
 
@@ -625,11 +625,11 @@ export class RslViewport extends LitElement {
         ${comparing
           ? html`
               <button
-                aria-label="Export pane A as PNG"
-                title="Export only the edited pipeline"
+                aria-label="Download the current pipeline as PNG"
+                title="Download the current pipeline only"
                 @click=${() => this.emit('export-png', { composite: false })}
               >
-                ⇩A<span class="btn-label">Pane A</span>
+                ⇩<span class="btn-label">Current</span>
               </button>
             `
           : nothing}
