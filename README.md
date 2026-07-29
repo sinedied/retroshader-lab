@@ -39,7 +39,7 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
   (GB, GBC, GBA, NES, SNES, Mega Drive, PlayStation, PSP), or your own screenshots
 - **Pixel-honest viewport**: 1:1 by default, `Fit · 1:1 · 2:1 · 4:1` shortcuts and zoom up to 16× with
   drag-to-pan, and **PNG export at 1:1**
-- **Compare up to 3 pipelines** — the one you are editing against the raw source or any stock preset,
+- **Compare up to 3 pipelines** — the one you are editing against the raw source, any stock preset or one of your own,
   in two layouts: a movable **overlay** divider, or **side-by-side** columns that pan together
 - **Sizable comparison frame** (e.g. `1280×480`) that the render is cropped into and dragged around,
   never scaled down, exported at exactly that size, with optional labels
@@ -87,7 +87,10 @@ They then appear in the **Game screenshots** dropdown.
 ### Comparing pipelines
 
 Hit **Compare** in the viewport toolbar to put 2 or 3 panes on screen. Pane A is always the pipeline
-you are editing; the others show the raw source (the default) or any stock preset.
+you are editing; the others show the raw source (the default), any stock preset, or one of your own
+saved presets — those are listed first, under **Your presets**. A pane follows the preset it points
+at: update it and the pane re-renders, rename it and the label changes, delete it and the pane falls
+back to the raw source and says so.
 
 | Layout | Behaviour |
 | --- | --- |
@@ -207,6 +210,10 @@ handing you a link that silently breaks.
 
 If a shared shader has the same name as one of yours but different contents, yours is kept and the
 incoming one is renamed, with the pipeline repointed at it.
+
+If a comparison pane uses one of your own presets, the preset travels with the link so the pane
+renders for the recipient — but it is only held for their session, and never added to their saved
+presets.
 
 ## How it works
 

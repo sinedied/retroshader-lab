@@ -192,6 +192,15 @@ While comparing, the panes divide a rectangle measured in **export pixels** (`co
   trap makes `Page.navigate` to a `#…` URL a no-op when testing.
 - Incoming custom shaders are matched **by content**: identical is reused, same-name-different-source
   is renamed *and the pass references remapped*.
+- A comparison pane's preset is a **plain string**: a bundled path, or `user:<id>` for one of the
+  user's own. Keeping it a string is what lets sessions and links written before user presets were
+  selectable keep parsing — anything without the prefix is a stock path. A user preset a pane points
+  at travels with the link and is held **transiently** on arrival, never written to the recipient's
+  saved presets.
+- A user preset is cfg text, not a fetchable file, so it is resolved through a lookup and kept out of
+  `readPreset`'s path cache — its text changes on every update, and a cached copy would outlive the
+  edit. Update, rename and delete all have to re-resolve the panes, or a pane keeps rendering a copy
+  of something that has changed or gone.
 
 ## Verifying in the browser
 
