@@ -15,7 +15,7 @@ import {
   type PassRenderInfo,
   type RenderResult
 } from '../core/pipeline.js';
-import { panePipelineConfig, paneLabel } from '../core/preset-config.js';
+import { panePipelineConfig, paneLabel, type UserPresetLookup } from '../core/preset-config.js';
 import {
   runBenchmark,
   ROUND_PRESETS,
@@ -43,7 +43,7 @@ import {
 } from '../core/share.js';
 import { exportCfg, importCfg } from '../core/cfg.js';
 import { defaultValue, isConfigurable, quantize } from '../core/pragma-params.js';
-import { store, defaultPass, type AppState } from '../core/state.js';
+import { store, defaultPass, type AppState, type ComparePane } from '../core/state.js';
 import {
   SYSTEM_RESOLUTIONS,
   aspectOfSystem,
@@ -329,6 +329,12 @@ export class RslApp extends LitElement {
 
   private readonly library = new ShaderLibrary();
   private readonly userPresets = new UserPresetStore();
+  /**
+   * Presets that arrived with a shared link. They are kept for the session only and never
+   * written to storage, so opening someone's comparison renders it without quietly adding
+   * their presets to yours.
+   */
+  private readonly transientPresets = new Map<string, { name: string; cfg: string }>();
   /** One pipeline per comparison pane; index 0 is the pipeline being edited. */
   private pipelines: ShaderPipeline[] = [];
   /** Resolved config of each comparison pane, kept in sync with the pane selection. */
@@ -404,19 +410,52 @@ export class RslApp extends LitElement {
    * Resolves the preset panes into pipeline configs. Raw panes stay `undefined` so they
    * always follow the pipeline currently being edited instead of a stale snapshot.
    */
+  /**
+   * Resolves a comparison pane's preset, whether it is a bundled one or one of the user's.
+   *
+   * Consults the transient presets first: those arrive with a shared link and are kept for
+   * the session only, so a link renders correctly without adding anything to the
+   * recipient's saved presets.
+   */
+  private readonly lookupUserPreset: UserPresetLookup = (id) => {
+    const transient = this.transientPresets.get(id);
+    if (transient) return transient;
+    const preset = this.userPresets.get(id);
+    return preset ? { name: preset.name, cfg: preset.cfg } : undefined;
+  };
+
   private async refreshPanes(): Promise<void> {
     const state = this.appState;
     const paramsOf = (shader: string) => this.library.paramsOf(shader);
     try {
       this.paneConfigs = await Promise.all(
         state.panes.map((pane) =>
-          pane.preset ? panePipelineConfig(pane.preset, state.pipeline, paramsOf) : undefined
+          pane.preset
+            ? panePipelineConfig(pane.preset, state.pipeline, paramsOf, this.lookupUserPreset)
+            : undefined
         )
       );
     } catch (error) {
       this.notices = [`Could not load a comparison preset: ${(error as Error).message}`];
       return;
     }
+
+    // a user preset a pane points at can be deleted; say so rather than leaving the pane
+    // showing the raw source with no explanation
+    const missing = state.panes
+      .map((pane, index) => ({ pane, index }))
+      .filter(({ pane, index }) => pane.preset && this.paneConfigs[index] === undefined);
+    if (missing.length > 0) {
+      this.notices = missing.map(
+        ({ index }) =>
+          `Pane ${String.fromCharCode(66 + index)} showed a preset that no longer exists, so it is showing the raw source.`
+      );
+      const panes = state.panes.map((pane, index) =>
+        missing.some((entry) => entry.index === index) ? { preset: undefined } : pane
+      ) as [ComparePane, ComparePane];
+      store.update({ panes });
+    }
+
     this.scheduleRender();
   }
 
@@ -442,7 +481,11 @@ export class RslApp extends LitElement {
     let current = 'Current';
     if (selected?.kind === 'user') current = this.userPresets.get(selected.id)?.name ?? 'Current';
     else if (selected?.kind === 'stock') current = paneLabel(selected.id);
-    return [current, paneLabel(state.panes[0]?.preset), paneLabel(state.panes[1]?.preset)];
+    return [
+      current,
+      paneLabel(state.panes[0]?.preset, this.lookupUserPreset),
+      paneLabel(state.panes[1]?.preset, this.lookupUserPreset)
+    ];
   }
 
   private rebuildSource(): void {
@@ -613,7 +656,8 @@ export class RslApp extends LitElement {
     const targets: BenchmarkTarget[] = configs.flatMap((config, index) => {
       const pipeline = this.pipelines[index];
       if (!pipeline) return [];
-      const label = index === 0 ? 'Current' : paneLabel(state.panes[index - 1]?.preset);
+      // the same labels the panes carry on screen, so the table names the user's own presets
+      const label = index === 0 ? this.paneLabels[0] : this.paneLabels[index];
       // render() silently skips passes whose shader is not cached, which would time a
       // pane as almost free; compile up front rather than trusting the last frame to have
       for (const name of new Set([FINAL_SHADER, ...config.passes.map((pass) => pass.shader)])) {
@@ -678,6 +722,7 @@ export class RslApp extends LitElement {
             const entry = this.library.get(name);
             return entry?.custom ? entry.source : undefined;
           },
+          userPreset: (id) => this.lookupUserPreset(id),
           pristineStockCfg,
           userPresetName:
             selected?.kind === 'user' ? this.userPresets.get(selected.id)?.name : undefined
@@ -749,6 +794,12 @@ export class RslApp extends LitElement {
       // otherwise persist over the recipient's own session
       store.holdSaving();
       const renames = new Map<string, string>();
+
+      // presets a pane points at are held for the session only: rendering someone's
+      // comparison must not quietly add their presets to the recipient's list
+      for (const preset of shared.presets) {
+        this.transientPresets.set(preset.id, { name: preset.name, cfg: preset.cfg });
+      }
 
       for (const shader of shared.shaders) {
         const existing = this.library.get(shader.name);
@@ -853,6 +904,9 @@ export class RslApp extends LitElement {
   private onPresetUpdate(id: string): void {
     if (!this.userPresets.get(id)) return;
     this.userPresets.update(id, { cfg: this.cfgText });
+    // a pane showing this preset holds a resolved copy, so it has to be re-resolved or it
+    // would keep rendering the version from before the update
+    void this.refreshPanes();
     this.requestUpdate();
   }
 
@@ -861,6 +915,9 @@ export class RslApp extends LitElement {
     if (!preset || !window.confirm(`Delete the preset "${preset.name}"?`)) return;
     this.userPresets.remove(id);
     if (this.appState.selectedPreset?.id === id) store.update({ selectedPreset: undefined });
+    // a comparison pane may have been showing it; re-resolving is what falls those panes
+    // back to the raw source instead of leaving them on a cached copy of a deleted preset
+    void this.refreshPanes();
     this.requestUpdate();
   }
 

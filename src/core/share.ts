@@ -18,7 +18,7 @@
  */
 import { defaultState, type AppState, type ComparePane } from './state.js';
 import { exportCfg, importCfg } from './cfg.js';
-import { resolveParams } from './preset-config.js';
+import { resolveParams, parsePaneRef } from './preset-config.js';
 import type { PipelineConfig, ShaderParam } from './types.js';
 
 /**
@@ -42,6 +42,13 @@ export const MAX_LENGTH = 16000;
 export interface SharedShader {
   name: string;
   source: string;
+}
+
+/** A user preset travelling with the link, because a comparison pane points at it. */
+export interface SharedPreset {
+  id: string;
+  name: string;
+  cfg: string;
 }
 
 /**
@@ -90,6 +97,11 @@ interface SharePayload {
   si?: boolean;
   /** Custom shaders used by the pipeline or the panes. */
   sh?: SharedShader[];
+  /**
+   * User presets a comparison pane points at. Their ids mean nothing to a recipient, so
+   * the cfg travels with the link and is registered transiently on arrival.
+   */
+  up?: SharedPreset[];
 }
 
 export interface ShareInput {
@@ -97,6 +109,8 @@ export interface ShareInput {
   paramsByShader: Map<string, ShaderParam[]>;
   /** Looks up a custom shader's source; bundled shaders return undefined. */
   customShader: (name: string) => string | undefined;
+  /** Looks up a user preset a comparison pane points at, so its cfg can travel. */
+  userPreset?: (id: string) => { name: string; cfg: string } | undefined;
   /**
    * cfg text of the stock preset currently selected, already normalised through
    * import/export, or undefined when there is none to compare against.
@@ -233,6 +247,18 @@ function buildPayload(input: ShareInput): SharePayload {
   if (state.paneCount !== base.paneCount) payload.pc = state.paneCount;
   const panes = paneList(state.panes);
   if (panes.some((preset) => preset !== null)) payload.pn = panes;
+
+  // a pane pointing at one of the user's presets has to carry it: the id alone means
+  // nothing to whoever opens the link
+  const userPresets: SharedPreset[] = [];
+  for (const ref of panes) {
+    if (!ref) continue;
+    const parsed = parsePaneRef(ref);
+    if (parsed.kind !== 'user' || userPresets.some((entry) => entry.id === parsed.id)) continue;
+    const preset = input.userPreset?.(parsed.id);
+    if (preset) userPresets.push({ id: parsed.id, name: preset.name, cfg: preset.cfg });
+  }
+  if (userPresets.length > 0) payload.up = userPresets;
   if (!sameNumbers(state.dividers, base.dividers)) payload.dv = state.dividers.map((d) => +d.toFixed(4));
   if (state.compareWidth !== base.compareWidth) payload.cw = state.compareWidth;
   if (state.compareHeight !== base.compareHeight) payload.ch = state.compareHeight;
@@ -327,6 +353,8 @@ export interface DecodedShare {
   scaling?: string;
   coreAspect?: number;
   shaders: SharedShader[];
+  /** User presets the panes point at, to be held for the session only. */
+  presets: SharedPreset[];
 }
 
 /** Reads the payload out of a URL fragment, or undefined when there is none. */
@@ -403,6 +431,14 @@ export async function decodeShare(encoded: string): Promise<DecodedShare> {
       ? payload.sh.filter(
           (entry): entry is SharedShader =>
             typeof entry?.name === 'string' && typeof entry?.source === 'string'
+        )
+      : [],
+    presets: Array.isArray(payload.up)
+      ? payload.up.filter(
+          (entry): entry is SharedPreset =>
+            typeof entry?.id === 'string' &&
+            typeof entry?.name === 'string' &&
+            typeof entry?.cfg === 'string'
         )
       : []
   };
