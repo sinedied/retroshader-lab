@@ -7,7 +7,8 @@
     "build": "npm run shaders && tsc --noEmit && vite build",
     "preview": "vite preview",
     "shaders": "node scripts/gen-shader-manifest.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "palette": "node scripts/gb-palette.mjs"
   },
   "keywords": [
     "glsl",
@@ -23,6 +24,7 @@
   "type": "module",
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "pngjs": "^7.0.0",
     "typescript": "^7.0.2",
     "vite": "^8.1.5"
   },
