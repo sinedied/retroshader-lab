@@ -561,11 +561,11 @@ export class RslApp extends LitElement {
         <div class="seg">
           <button
             aria-pressed=${state.showRail}
-              aria-label="Toggle the left panel"
-            title="Toggle the left panel  ( [ )"
+              aria-label="Toggle the bench panel"
+            title="Toggle the bench panel  ( [ )"
             @click=${() => store.update({ showRail: !state.showRail })}
           >
-            ◧<span class="btn-label">Panels</span>
+            ◧<span class="btn-label">Bench</span>
           </button>
           <button
             aria-pressed=${state.showDock}
