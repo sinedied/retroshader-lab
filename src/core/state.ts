@@ -133,6 +133,8 @@ export class Store {
   private state: AppState = defaultState();
   private readonly listeners = new Set<Listener>();
   private saveTimer: number | undefined;
+  /** Suspends persistence while a shared link is being shown; see `applyShared`. */
+  private holdSave = false;
 
   get value(): AppState {
     return this.state;
@@ -146,6 +148,45 @@ export class Store {
   update(patch: Partial<AppState>): void {
     this.state = { ...this.state, ...patch };
     this.emit();
+  }
+
+  /**
+   * Suspends persistence, and drops any save already queued.
+   *
+   * Must be called *before* a shared link starts importing its cfg: the import goes
+   * through the ordinary update path, which would otherwise write the recipient's
+   * localStorage before the hold was ever set.
+   */
+  holdSaving(): void {
+    this.holdSave = true;
+    if (this.saveTimer !== undefined) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = undefined;
+    }
+  }
+
+  /**
+   * Applies state from a shared link **without persisting it**.
+   *
+   * Opening someone else's link to look at it must not overwrite the session you already
+   * had. Saving stays suspended until `resumeSaving()` is called, which the app does once
+   * boot has settled — so the shared setup is only written once the recipient actually
+   * changes something, at which point it has become theirs.
+   */
+  applyShared(patch: Partial<AppState>): void {
+    this.holdSaving();
+    this.state = { ...this.state, ...patch };
+    for (const listener of this.listeners) listener(this.state);
+  }
+
+  /** Ends the suspension started by `applyShared`; the next change persists as usual. */
+  resumeSaving(): void {
+    this.holdSave = false;
+  }
+
+  /** True while a shared link is being shown and nothing has been changed yet. */
+  get isShowingShared(): boolean {
+    return this.holdSave;
   }
 
   updatePipeline(patch: Partial<PipelineConfig>): void {
@@ -211,6 +252,7 @@ export class Store {
   }
 
   private scheduleSave(): void {
+    if (this.holdSave) return;
     if (this.saveTimer !== undefined) clearTimeout(this.saveTimer);
     this.saveTimer = window.setTimeout(() => this.save(), 250);
   }
