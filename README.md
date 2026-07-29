@@ -28,9 +28,9 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 ## Features
 
 - **1–3 shader passes** with the exact NextUI options: `filter`, `srctype`, `scaletype`, `upscale` (`1×`–`8×` or `screen`)
-- **26 stock shaders** — 21 from NextUI's `Shaders/glsl` and the 5 MIT `*-perfect` ones from
+- **27 stock shaders** — 21 from NextUI's `Shaders/glsl` and the 6 MIT `*-perfect` ones from
   [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders) — plus **your own** added from a file or a URL
-- **26 stock presets** (`real-gameboy`, `crt-perfect`, `lcd-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
+- **27 stock presets** (`real-gameboy`, `crt-perfect`, `lcd-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
 - **Your own presets**, saved in the browser and listed above the stock ones, with rename, update and delete
 - **16 real game screenshots** at native resolution — 2 per platform, unfiltered, from libretro-thumbnails
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps, saved with the preset
@@ -141,7 +141,7 @@ prediction of handheld performance.
 
 ### Presets
 
-The 26 stock configs are bundled in
+The 27 stock configs are bundled in
 `public/shaders/presets/`. Pick one in the **Presets** dropdown of the cfg panel and the whole
 pipeline — passes, filters, scaling and shader parameters — is applied at once.
 
@@ -308,8 +308,8 @@ The pipeline is intentionally faithful, including quirks. Known deviations:
 ## Project structure
 
 ```
-public/shaders/glsl/      26 stock shaders (21 NextUI + 5 perfect-retroshaders)
-public/shaders/presets/   26 stock shader configs (incl. the per-system sets/)
+public/shaders/glsl/      27 stock shaders (21 NextUI + 6 perfect-retroshaders)
+public/shaders/presets/   27 stock shader configs (incl. the per-system sets/)
 public/shaders/           default.glsl — the final scale pass · LICENSE · NOTICE
 public/samples/           game screenshots + index.json + NOTICE
 scripts/                  asset manifest generator
