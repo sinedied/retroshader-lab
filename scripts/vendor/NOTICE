@@ -1,0 +1,20 @@
+Third-party file — not part of the RetroShader Lab application
+==============================================================
+
+gbcpalettes.h
+-------------
+    Origin:   https://github.com/libretro/gambatte-libretro
+              libgambatte/libretro/gbcpalettes.h
+    Copyright (C) 2007 by Sindre Aamås <sinamas@users.sourceforge.net>
+    Licence:  GNU General Public License, version 2
+
+Copied verbatim, with its copyright and licence header intact, as permitted by
+section 1 of the GPL version 2. It has not been modified or reformatted.
+
+Why it is here
+--------------
+It is the authoritative list of Gambatte's colour palettes, and `npm run palette`
+parses it to recolour Game Boy screenshots. It is **build-time tooling only**: it is
+not imported by any source file under `src/`, and nothing derived from it is bundled
+into the web app, which remains GPL-3.0-or-later. Updating it is a verbatim re-copy
+from upstream, nothing more.
