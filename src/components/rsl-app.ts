@@ -8,6 +8,7 @@ import './rsl-dock.js';
 import './rsl-benchmark.js';
 import type { RslViewport } from './rsl-viewport.js';
 import type { RslBenchmark } from './rsl-benchmark.js';
+import type { RslDock } from './rsl-dock.js';
 import {
   ShaderPipeline,
   computePassSizes,
@@ -28,7 +29,9 @@ import {
   FINAL_SHADER,
   BUNDLED_SAMPLES,
   BUNDLED_PRESETS,
-  loadPreset
+  loadPreset,
+  readShaderFile,
+  fetchShaderSource
 } from '../core/shader-library.js';
 import { computeDstRect } from '../core/scaling.js';
 import { exportCfg, importCfg } from '../core/cfg.js';
@@ -232,6 +235,7 @@ export class RslApp extends LitElement {
   ];
 
   @query('rsl-viewport') private viewport!: RslViewport;
+  @query('rsl-dock') private dock!: RslDock | null;
   @query('rsl-benchmark') private benchmarkDialog!: RslBenchmark;
 
   @state() private appState: AppState = store.value;
@@ -244,6 +248,7 @@ export class RslApp extends LitElement {
   /** Messages from user actions (import, preset, upload); render warnings are separate
       because every render replaces them. */
   @state() private notices: string[] = [];
+  @state() private shaderNotice: { ok: boolean; text: string } | undefined = undefined;
   @state() private benchmarkResults: BenchmarkResult[] = [];
   @state() private benchmarkRunning = false;
   @state() private benchmarkProgress = 0;
@@ -333,6 +338,20 @@ export class RslApp extends LitElement {
   /** Selectable shaders: the final scale pass is not a pipeline shader. */
   private get shaderNames(): string[] {
     return this.library.names.filter((name) => name !== FINAL_SHADER);
+  }
+
+  /**
+   * Labels for the comparison panes. Pane 0 is named after the preset it was loaded from,
+   * so an exported comparison says which of the user's presets it is showing rather than
+   * an anonymous "Current".
+   */
+  private get paneLabels(): string[] {
+    const state = this.appState;
+    const selected = state.selectedPreset;
+    let current = 'Current';
+    if (selected?.kind === 'user') current = this.userPresets.get(selected.id)?.name ?? 'Current';
+    else if (selected?.kind === 'stock') current = paneLabel(selected.id);
+    return [current, paneLabel(state.panes[0]?.preset), paneLabel(state.panes[1]?.preset)];
   }
 
   private rebuildSource(): void {
@@ -626,6 +645,98 @@ export class RslApp extends LitElement {
     }
   }
 
+  /**
+   * Adds shaders picked or dropped by the user.
+   *
+   * Each is compiled before being kept: `render()` silently skips a pass whose shader is
+   * not in the cache, so an invalid shader would otherwise look like an empty pass rather
+   * than an error. A failed compile is reported and nothing is saved.
+   */
+  private async onShaderFiles(files: File[]): Promise<void> {
+    const added: string[] = [];
+    const problems: string[] = [];
+    for (const file of files) {
+      try {
+        const { name, source } = await readShaderFile(file);
+        added.push(this.acceptShader(name, source));
+      } catch (error) {
+        problems.push(`${file.name}: ${(error as Error).message}`);
+      }
+    }
+    this.reportShaderResult(added, problems);
+  }
+
+  private async onShaderUrl(url: string): Promise<void> {
+    try {
+      const { name, source } = await fetchShaderSource(url);
+      this.reportShaderResult([this.acceptShader(name, source)], []);
+    } catch (error) {
+      this.reportShaderResult([], [(error as Error).message]);
+    }
+  }
+
+  /** Compiles a candidate shader, then stores it. Throws with the compile log if invalid. */
+  private acceptShader(name: string, source: string): string {
+    const pipeline = this.main;
+    if (pipeline) {
+      const probe = `__probe__${name}`;
+      const compiled = pipeline.compile(probe, source);
+      const issues = compiled.issues;
+      pipeline.invalidate(probe);
+      if (issues.length > 0) {
+        const first = issues[0];
+        throw new Error(`${first.stage} shader did not compile — ${first.log.trim()}`);
+      }
+    }
+    const entry = this.library.addFromText(name, source);
+    return entry.name;
+  }
+
+  private reportShaderResult(added: string[], problems: string[]): void {
+    const messages: string[] = [];
+    if (added.length > 0) messages.push(`Added ${added.join(', ')}.`);
+    messages.push(...problems);
+    this.notices = messages;
+    // the Shaders tab needs its own feedback: the log tab is a different tab, and a failed
+    // add would otherwise look like nothing happened at all
+    this.shaderNotice =
+      messages.length === 0
+        ? undefined
+        : { ok: problems.length === 0, text: messages.join(' ') };
+    if (added.length > 0) {
+      this.requestUpdate();
+      this.scheduleRender();
+    }
+  }
+
+  private onShaderDelete(name: string): void {
+    if (this.shadersInUse.includes(name)) {
+      const message = `"${name}" is used by the current pipeline — remove that pass first.`;
+      this.notices = [message];
+      this.shaderNotice = { ok: false, text: message };
+      return;
+    }
+    if (!window.confirm(`Delete the custom shader "${name}"?`)) return;
+    this.library.removeCustom(name);
+    for (const pipeline of this.pipelines) pipeline?.invalidate(name);
+    this.notices = [`Deleted ${name}.`];
+    this.shaderNotice = { ok: true, text: `Deleted ${name}.` };
+    this.requestUpdate();
+  }
+
+  /** Shader names the current pipeline depends on, so they cannot be deleted under it. */
+  private get shadersInUse(): string[] {
+    return [...new Set(this.appState.pipeline.passes.map((pass) => pass.shader))];
+  }
+
+  /** Reveals the shader library, opening the dock if it was hidden. */
+  private openShaderLibrary(): void {
+    if (!this.appState.showDock) store.update({ showDock: true });
+    this.shaderNotice = undefined;
+    // the dock may have only just been created, so select the tab after it renders
+    void this.updateComplete.then(() => this.dock?.showShaders());
+  }
+
   private resetAll(): void {
     store.reset();
     this.syncPassParams();
@@ -767,6 +878,7 @@ export class RslApp extends LitElement {
             @pass-param=${(e: CustomEvent<{ index: number; name: string; value: number }>) =>
               store.setPassParam(e.detail.index, e.detail.name, e.detail.value)}
             @pass-params-reset=${(e: CustomEvent<number>) => this.resetPassParams(e.detail)}
+            @shader-library-open=${() => this.openShaderLibrary()}
           ></rsl-pipeline-panel>
 
           <p class="footer-note">
@@ -787,6 +899,10 @@ export class RslApp extends LitElement {
           .paneCount=${state.paneCount}
           .panes=${state.panes}
           .dividers=${state.dividers}
+          .compareWidth=${state.compareWidth}
+          .compareHeight=${state.compareHeight}
+          .exportLabels=${state.exportLabels}
+          .labels=${this.paneLabels}
           .presets=${BUNDLED_PRESETS}
           .userPresets=${this.userPresets.all}
           .selectedPreset=${state.selectedPreset}
@@ -803,9 +919,24 @@ export class RslApp extends LitElement {
           .renderMs=${this.renderMs}
           @viewport-ready=${this.onViewportReady}
           @view-change=${(e: CustomEvent<Partial<AppState>>) => store.update(e.detail)}
-          @compare-change=${(e: CustomEvent<{ compareMode?: AppState['compareMode']; paneCount?: 2 | 3 }>) => {
-            store.setCompare(e.detail);
-            void this.refreshPanes();
+          @compare-change=${(
+            e: CustomEvent<{
+              compareMode?: AppState['compareMode'];
+              paneCount?: 2 | 3;
+              compareWidth?: number;
+              compareHeight?: number;
+              exportLabels?: boolean;
+            }>
+          ) => {
+            const { compareWidth, compareHeight, exportLabels, ...compare } = e.detail;
+            if (compareWidth !== undefined || compareHeight !== undefined) {
+              store.update({ compareWidth, compareHeight });
+            }
+            if (exportLabels !== undefined) store.update({ exportLabels });
+            if (compare.compareMode !== undefined || compare.paneCount !== undefined) {
+              store.setCompare(compare);
+              void this.refreshPanes();
+            }
           }}
           @pane-change=${(e: CustomEvent<{ index: 0 | 1; preset: string | undefined }>) => {
             store.setPane(e.detail.index, e.detail.preset);
@@ -815,7 +946,7 @@ export class RslApp extends LitElement {
           @benchmark-open=${() => this.openBenchmark()}
           @export-png=${(e: CustomEvent<{ composite: boolean }>) => {
             const name = `retroshader-${state.sourceSystem}-${state.outputWidth}x${state.outputHeight}`;
-            if (e.detail?.composite) this.viewport.exportComposite(`${name}-compare.png`);
+            if (e.detail?.composite) void this.viewport.exportComposite(`${name}-compare.png`);
             else this.viewport.exportPng(`${name}.png`);
           }}
         ></rsl-viewport>
@@ -831,6 +962,12 @@ export class RslApp extends LitElement {
           .passes=${this.passInfos}
           .issues=${this.issues}
           .warnings=${[...this.notices, ...this.warnings]}
+          .shaders=${this.library.all.filter((entry) => entry.name !== FINAL_SHADER)}
+          .shadersInUse=${this.shadersInUse}
+          .shaderNotice=${this.shaderNotice}
+          @shader-add-file=${(e: CustomEvent<File[]>) => void this.onShaderFiles(e.detail)}
+          @shader-add-url=${(e: CustomEvent<string>) => void this.onShaderUrl(e.detail)}
+          @shader-delete=${(e: CustomEvent<string>) => this.onShaderDelete(e.detail)}
           @cfg-import=${(e: CustomEvent<string>) => this.onCfgImport(e.detail)}
           @preset-load=${(e: CustomEvent<{ kind: string; id: string }>) =>
             this.onPresetLoad(e.detail)}
