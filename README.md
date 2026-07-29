@@ -33,12 +33,13 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 - **16 real game screenshots** at native resolution — 2 per platform, unfiltered, from libretro-thumbnails
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps, saved with the preset
 - **NextUI screen scaling** — `Native`, `Aspect`, `Aspect (screen)`, `Fullscreen`, `Cropped` — with real letterboxing
-- **Generated test patterns** at console resolutions (GB, GBC, GBA, NES, SNES, Mega Drive, PlayStation, PSP) or your own screenshots
+- **Generated test patterns** (1px grid, colour bars, dithered gradients) at console resolutions
+  (GB, GBC, GBA, NES, SNES, Mega Drive, PlayStation, PSP), or your own screenshots
 - **Pixel-honest viewport**: 1:1 by default, `Fit · 1:1 · 2:1 · 4:1` shortcuts and zoom up to 16× with
   drag-to-pan, and **PNG export at 1:1**
 - **Compare up to 3 pipelines** — the one you are editing against the raw source or any stock preset,
   in two layouts: a movable **overlay** divider, or **side-by-side** columns that pan together
-- **Foldable panels** and collapsible side rails (`[` and `]`)
+- **Foldable panels** and collapsible side rails (`[` and `]`), down to an icon-only toolbar on narrow screens
 - **Pass inspector** showing every intermediate render with its computed `InputSize` / `TextureSize` / `OutputSize`
 - **Live `.cfg`** you can edit, download, or load back — unknown keys (core options like `gambatte_*`) are preserved
 - **GLSL error panel** with the fully preprocessed source, line-numbered
