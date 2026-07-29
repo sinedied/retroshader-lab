@@ -13,6 +13,7 @@ import {
   type RenderResult
 } from '../core/pipeline.js';
 import { panePipelineConfig } from '../core/preset-config.js';
+import { UserPresetStore } from '../core/user-presets.js';
 import {
   ShaderLibrary,
   FINAL_SHADER,
@@ -234,6 +235,7 @@ export class RslApp extends LitElement {
   @state() private notices: string[] = [];
 
   private readonly library = new ShaderLibrary();
+  private readonly userPresets = new UserPresetStore();
   /** One pipeline per comparison pane; index 0 is the pipeline being edited. */
   private pipelines: ShaderPipeline[] = [];
   /** Resolved config of each comparison pane, kept in sync with the pane selection. */
@@ -451,7 +453,7 @@ export class RslApp extends LitElement {
       return { ...pass, params };
     });
 
-    store.update({ cfgExtras: imported.extras });
+    store.update({ cfgExtras: imported.extras, selectedPreset: undefined });
     store.updatePipeline({
       passes,
       ...(imported.scaling ? { scaling: imported.scaling } : {}),
@@ -460,12 +462,73 @@ export class RslApp extends LitElement {
     this.notices = [...imported.warnings];
   }
 
-  private async onPresetLoad(path: string): Promise<void> {
+  /** Loads either a bundled preset or one of the user's own, both as cfg text. */
+  private async onPresetLoad(selection: { kind: string; id: string }): Promise<void> {
     try {
-      this.onCfgImport(await loadPreset(path));
+      if (selection.kind === 'user') {
+        const preset = this.userPresets.get(selection.id);
+        if (!preset) return;
+        this.onCfgImport(preset.cfg);
+      } else {
+        this.onCfgImport(await loadPreset(selection.id));
+      }
+      store.update({
+        selectedPreset: { kind: selection.kind === 'user' ? 'user' : 'stock', id: selection.id }
+      });
     } catch (error) {
-      this.notices = [`Could not load preset "${path}": ${(error as Error).message}`];
+      this.notices = [`Could not load preset "${selection.id}": ${(error as Error).message}`];
     }
+  }
+
+  private onPresetSave(): void {
+    const selected = this.appState.selectedPreset;
+    const suggested =
+      selected?.kind === 'user'
+        ? (this.userPresets.get(selected.id)?.name ?? '')
+        : selected
+          ? `${(selected.id.split('/').pop() ?? '').replace(/\.cfg$/, '')} (copy)`
+          : '';
+    const name = window.prompt('Name this preset', suggested)?.trim();
+    if (!name) return;
+    if (this.userPresets.hasName(name)) {
+      const existing = this.userPresets.all.find(
+        (preset) => preset.name.toLowerCase() === name.toLowerCase()
+      );
+      if (!existing || !window.confirm(`"${name}" already exists. Overwrite it?`)) return;
+      this.userPresets.update(existing.id, { cfg: this.cfgText });
+      store.update({ selectedPreset: { kind: 'user', id: existing.id } });
+    } else {
+      const created = this.userPresets.create(name, this.cfgText);
+      store.update({ selectedPreset: { kind: 'user', id: created.id } });
+    }
+    this.requestUpdate();
+  }
+
+  private onPresetRename(id: string): void {
+    const preset = this.userPresets.get(id);
+    if (!preset) return;
+    const name = window.prompt('Rename preset', preset.name)?.trim();
+    if (!name || name === preset.name) return;
+    if (this.userPresets.hasName(name, id)) {
+      this.notices = [`A preset named "${name}" already exists.`];
+      return;
+    }
+    this.userPresets.update(id, { name });
+    this.requestUpdate();
+  }
+
+  private onPresetUpdate(id: string): void {
+    if (!this.userPresets.get(id)) return;
+    this.userPresets.update(id, { cfg: this.cfgText });
+    this.requestUpdate();
+  }
+
+  private onPresetDelete(id: string): void {
+    const preset = this.userPresets.get(id);
+    if (!preset || !window.confirm(`Delete the preset "${preset.name}"?`)) return;
+    this.userPresets.remove(id);
+    if (this.appState.selectedPreset?.id === id) store.update({ selectedPreset: undefined });
+    this.requestUpdate();
   }
 
   private async onSourceFile(file: File): Promise<void> {
@@ -634,6 +697,8 @@ export class RslApp extends LitElement {
           .panes=${state.panes}
           .dividers=${state.dividers}
           .presets=${BUNDLED_PRESETS}
+          .userPresets=${this.userPresets.all}
+          .selectedPreset=${state.selectedPreset}
           .dstRect=${this.passSizes.length >= 0 && this.source
             ? computeDstRect(
                 state.pipeline.scaling,
@@ -668,11 +733,18 @@ export class RslApp extends LitElement {
           ?hidden=${!state.showDock}
           .cfgText=${this.cfgText}
           .presets=${BUNDLED_PRESETS}
+          .userPresets=${this.userPresets.all}
+          .selectedPreset=${state.selectedPreset}
           .passes=${this.passInfos}
           .issues=${this.issues}
           .warnings=${[...this.notices, ...this.warnings]}
           @cfg-import=${(e: CustomEvent<string>) => this.onCfgImport(e.detail)}
-          @preset-load=${(e: CustomEvent<string>) => this.onPresetLoad(e.detail)}
+          @preset-load=${(e: CustomEvent<{ kind: string; id: string }>) =>
+            this.onPresetLoad(e.detail)}
+          @preset-save=${() => this.onPresetSave()}
+          @preset-rename=${(e: CustomEvent<string>) => this.onPresetRename(e.detail)}
+          @preset-update=${(e: CustomEvent<string>) => this.onPresetUpdate(e.detail)}
+          @preset-delete=${(e: CustomEvent<string>) => this.onPresetDelete(e.detail)}
         ></rsl-dock>
       </main>
     `;

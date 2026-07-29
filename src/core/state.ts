@@ -13,6 +13,13 @@ export type ViewMode = 'fit' | 'zoom';
 /** How the comparison panes are laid out over the stage. */
 export type CompareMode = 'off' | 'overlay' | 'side-by-side';
 
+/** Which preset the cfg panel currently has loaded, if any. */
+export interface SelectedPreset {
+  kind: 'user' | 'stock';
+  /** A user preset id, or a stock preset path such as `sets/GB/Sharp.cfg`. */
+  id: string;
+}
+
 /** A comparison pane: a bundled preset path, or `undefined` for the raw source. */
 export interface ComparePane {
   preset: string | undefined;
@@ -53,6 +60,8 @@ export interface AppState {
 
   /** Entries preserved from an imported cfg. */
   cfgExtras: CfgEntry[];
+  /** Preset shown as selected in the cfg panel. */
+  selectedPreset: SelectedPreset | undefined;
 }
 
 export function defaultPass(shader = 'pixellate.glsl'): PassConfig {
@@ -94,7 +103,8 @@ export function defaultState(): AppState {
     showRail: true,
     showDock: true,
     showInspector: false,
-    cfgExtras: []
+    cfgExtras: [],
+    selectedPreset: undefined
   };
 }
 

@@ -3,6 +3,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { panelStyles } from './shared-styles.js';
 import type { CompileIssue } from '../core/types.js';
 import type { PassRenderInfo } from '../core/pipeline.js';
+import type { UserPreset } from '../core/user-presets.js';
+import type { SelectedPreset } from '../core/state.js';
 
 type Tab = 'cfg' | 'passes' | 'log';
 
@@ -113,6 +115,13 @@ export class RslDock extends LitElement {
         background: rgba(125, 255, 155, 0.03);
       }
 
+      .preset-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 7px;
+      }
+
       .pass-card {
         border: 1px solid var(--line);
         border-radius: 2px;
@@ -213,6 +222,8 @@ export class RslDock extends LitElement {
 
   @property({ type: String }) cfgText = '';
   @property({ attribute: false }) presets: string[] = [];
+  @property({ attribute: false }) userPresets: UserPreset[] = [];
+  @property({ attribute: false }) selectedPreset: SelectedPreset | undefined = undefined;
   @property({ attribute: false }) passes: PassRenderInfo[] = [];
   @property({ attribute: false }) issues: CompileIssue[] = [];
   @property({ attribute: false }) warnings: string[] = [];
@@ -225,18 +236,43 @@ export class RslDock extends LitElement {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 
-  /** Presets grouped as "Presets" (root cfgs) and one group per `sets/<SYSTEM>` folder. */
+  /** Stock presets grouped by folder; HTML forbids nested optgroups, so the labels
+      carry the hierarchy instead. */
   private get presetGroups(): [string, string[]][] {
     const groups = new Map<string, string[]>();
     for (const path of this.presets) {
       const parts = path.split('/');
       const group =
-        parts.length === 1 ? 'Presets' : parts.length === 2 ? 'Sets' : `Sets · ${parts[1]}`;
+        parts.length === 1
+          ? 'NextUI stock'
+          : parts.length === 2
+            ? 'NextUI sets'
+            : `NextUI sets · ${parts[1]}`;
       const list = groups.get(group);
       if (list) list.push(path);
       else groups.set(group, [path]);
     }
     return [...groups.entries()];
+  }
+
+  /** The selected user preset, when the selection points at one. */
+  private get selectedUserPreset(): UserPreset | undefined {
+    if (this.selectedPreset?.kind !== 'user') return undefined;
+    return this.userPresets.find((preset) => preset.id === this.selectedPreset?.id);
+  }
+
+  /** True when the pipeline no longer matches the preset that is selected. */
+  private get presetModified(): boolean {
+    const preset = this.selectedUserPreset;
+    if (!preset) return false;
+    return preset.cfg.trim() !== this.cfgText.trim();
+  }
+
+  private get selectValue(): string {
+    if (!this.selectedPreset) return '';
+    return this.selectedPreset.kind === 'user'
+      ? `user:${this.selectedPreset.id}`
+      : `stock:${this.selectedPreset.id}`;
   }
 
   private async copyCfg(): Promise<void> {
@@ -299,36 +335,92 @@ export class RslDock extends LitElement {
     const text = this.draft ?? this.cfgText;
     const dirty = this.draft !== undefined && this.draft !== this.cfgText;
     return html`
-      ${this.presets.length > 0
-        ? html`
-            <div class="presets">
-              <label for="preset">NextUI stock presets</label>
-              <select
-                id="preset"
-                name="preset"
-                @change=${(e: Event) => {
-                  const select = e.target as HTMLSelectElement;
-                  const path = select.value;
-                  select.selectedIndex = 0;
-                  if (path) this.emit('preset-load', path);
-                }}
-              >
-                <option value="">— load a preset —</option>
-                ${this.presetGroups.map(
-                  ([group, paths]) => html`
-                    <optgroup label=${group}>
-                      ${paths.map(
-                        (path) => html`
-                          <option value=${path}>${path.split('/').pop()?.replace('.cfg', '')}</option>
-                        `
-                      )}
-                    </optgroup>
+      <div class="presets">
+        <label for="preset">Presets</label>
+        <select
+          id="preset"
+          name="preset"
+          .value=${this.selectValue}
+          @change=${(e: Event) => {
+            const value = (e.target as HTMLSelectElement).value;
+            if (!value) return;
+            const [kind, ...rest] = value.split(':');
+            this.emit('preset-load', { kind, id: rest.join(':') });
+          }}
+        >
+          <option value="" ?selected=${!this.selectedPreset}>— load a preset —</option>
+          ${this.userPresets.length > 0
+            ? html`
+                <optgroup label="Your presets">
+                  ${this.userPresets.map(
+                    (preset) => html`
+                      <option
+                        value=${`user:${preset.id}`}
+                        ?selected=${this.selectedPreset?.kind === 'user' &&
+                        this.selectedPreset.id === preset.id}
+                      >
+                        ${preset.name}${this.presetModified &&
+                        this.selectedPreset?.id === preset.id
+                          ? ' •'
+                          : ''}
+                      </option>
+                    `
+                  )}
+                </optgroup>
+              `
+            : nothing}
+          ${this.presetGroups.map(
+            ([group, paths]) => html`
+              <optgroup label=${group}>
+                ${paths.map(
+                  (path) => html`
+                    <option
+                      value=${`stock:${path}`}
+                      ?selected=${this.selectedPreset?.kind === 'stock' &&
+                      this.selectedPreset.id === path}
+                    >
+                      ${path.split('/').pop()?.replace('.cfg', '')}
+                    </option>
                   `
                 )}
-              </select>
-            </div>
-          `
-        : nothing}
+              </optgroup>
+            `
+          )}
+        </select>
+
+        <div class="preset-actions">
+          <button
+            title="Save the current pipeline as a user preset"
+            @click=${() => this.emit('preset-save', undefined)}
+          >
+            ＋ Save preset
+          </button>
+          ${this.selectedUserPreset
+            ? html`
+                <button
+                  ?disabled=${!this.presetModified}
+                  title="Overwrite this preset with the current pipeline"
+                  @click=${() => this.emit('preset-update', this.selectedUserPreset?.id)}
+                >
+                  ⟳ Update
+                </button>
+                <button
+                  title="Rename this preset"
+                  @click=${() => this.emit('preset-rename', this.selectedUserPreset?.id)}
+                >
+                  ✎ Rename
+                </button>
+                <button
+                  class="danger"
+                  title="Delete this preset"
+                  @click=${() => this.emit('preset-delete', this.selectedUserPreset?.id)}
+                >
+                  ✕ Delete
+                </button>
+              `
+            : nothing}
+        </div>
+      </div>
       <div class="toolbar">
         <button class="primary" @click=${this.download}>⇩ Save .cfg</button>
         <button @click=${this.copyCfg}>${this.copied ? '✓ Copied' : '⧉ Copy'}</button>
