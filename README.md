@@ -28,8 +28,9 @@ identical uniform contract, identical GLSL preprocessing, identical `#pragma par
 ## Features
 
 - **1–3 shader passes** with the exact NextUI options: `filter`, `srctype`, `scaletype`, `upscale` (`1×`–`8×` or `screen`)
-- **25 stock shaders** copied from NextUI's `Shaders/glsl`, plus **your own** added from a file or a URL
-- **25 stock NextUI presets** (`real-gameboy`, `crt-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
+- **29 stock shaders** — 21 from NextUI's `Shaders/glsl` and the 8 MIT `*-perfect` ones from
+  [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders) — plus **your own** added from a file or a URL
+- **29 stock presets** (`real-gameboy`, `crt-perfect-v5`, `lcd-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
 - **Your own presets**, saved in the browser and listed above the stock ones, with rename, update and delete
 - **16 real game screenshots** at native resolution — 2 per platform, unfiltered, from libretro-thumbnails
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps, saved with the preset
@@ -134,7 +135,7 @@ prediction of handheld performance.
 
 ### Presets
 
-The 25 stock configs from `NextUI/skeleton/BASE/Shaders` are bundled in
+The 29 stock configs are bundled in
 `public/shaders/presets/`. Pick one in the **Presets** dropdown of the cfg panel and the whole
 pipeline — passes, filters, scaling and shader parameters — is applied at once.
 
@@ -270,8 +271,8 @@ The pipeline is intentionally faithful, including quirks. Known deviations:
 ## Project structure
 
 ```
-public/shaders/glsl/      25 stock NextUI shaders
-public/shaders/presets/   25 stock NextUI shader configs (incl. the per-system sets/)
+public/shaders/glsl/      29 stock shaders (21 NextUI + 8 perfect-retroshaders)
+public/shaders/presets/   29 stock shader configs (incl. the per-system sets/)
 public/shaders/           default.glsl — the final scale pass · LICENSE · NOTICE
 public/samples/           game screenshots + index.json + NOTICE
 scripts/                  asset manifest generator
@@ -291,10 +292,12 @@ src/components/           Lit web components (rsl-*)
 RetroShader Lab is © 2026 Yohan Lasorsa and released under the **GNU GPL v3 or later**
 (see `LICENSE`), matching the license of NextUI it is derived from.
 
-- **Shaders and presets** in `public/shaders/` come from
-  [NextUI](https://github.com/LoveRetro/NextUI) (GPL-3.0) and are byte-identical copies. Most
-  shaders originate from the [libretro GLSL collection](https://github.com/libretro/glsl-shaders)
-  and keep the license stated in their own header — see `public/shaders/NOTICE`.
+- **Shaders and presets** in `public/shaders/` are byte-identical copies from two upstreams:
+  [NextUI](https://github.com/LoveRetro/NextUI) (GPL-3.0) for most of them, and
+  [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders) (MIT, same author as this
+  lab) for the `crt-perfect`, `lcd-perfect` and `pixel-perfect` family. Most of the NextUI shaders
+  originate from the [libretro GLSL collection](https://github.com/libretro/glsl-shaders) and keep
+  the license stated in their own header — see `public/shaders/NOTICE`.
 - **Screenshots** in `public/samples/` come from
   [libretro-thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails) `Named_Snaps`
   (captured with shaders and filters off, at native resolution). They depict copyrighted works that

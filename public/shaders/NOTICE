@@ -1,23 +1,43 @@
 RetroShader Lab — third-party notice for public/shaders
 =======================================================
 
-Everything in this directory comes from NextUI and is redistributed under its
-license. See LICENSE in this directory for the full text.
+This directory has two upstreams. Nothing here is modified: every file is a
+byte-identical copy, so what the lab compiles is exactly what the device does.
 
-NextUI
-------
+NextUI  (GPL-3.0)
+-----------------
     https://github.com/LoveRetro/NextUI
     Licensed under the GNU General Public License v3.0.
+    See LICENSE in this directory for the full text.
 
-    glsl/      copied verbatim from NextUI  skeleton/BASE/Shaders/glsl/
-    default.glsl  copied verbatim from NextUI  skeleton/SYSTEM/desktop/shaders/default.glsl
-               (the final scale pass of the minarch pipeline)
-    presets/   copied verbatim from NextUI  skeleton/BASE/Shaders/
-               (the stock shader configs, including the per-system sets/)
+    glsl/         21 shaders copied verbatim from  skeleton/BASE/Shaders/glsl/
+    default.glsl  copied verbatim from  skeleton/SYSTEM/desktop/shaders/default.glsl
+                  (the final scale pass of the minarch pipeline)
+    presets/      copied verbatim from  skeleton/BASE/Shaders/
+                  (the stock shader configs, including the per-system sets/)
+
+perfect-retroshaders  (MIT)
+---------------------------
+    https://github.com/sinedied/perfect-retroshaders
+    Copyright (c) 2026 sinedied, MIT — the full text is in each file's header.
+
+    glsl/   crt-perfect.glsl, crt-perfect-v2.glsl, crt-perfect-v3.glsl,
+            crt-perfect-v4.glsl, crt-perfect-v5.glsl, crt-perfect-v5b.glsl,
+            lcd-perfect.glsl, pixel-perfect.glsl
+
+    These were previously carried by NextUI and released into the public domain;
+    they are now maintained in their own repository under MIT. NextUI no longer
+    ships them, so this project tracks them from upstream directly.
+
+    Their presets in presets/ (crt-perfect*.cfg, lcd-perfect.cfg,
+    pixel-perfect.cfg) are written for this project rather than copied, since the
+    upstream repository does not carry minarch configs. Each uses the pass
+    settings its shader's header requires: a NEAREST sampler and rendering at the
+    final output resolution.
 
 Shader sources
 --------------
-Most of the shaders originate from the libretro GLSL shader collection
+Most of the NextUI shaders originate from the libretro GLSL shader collection
 (https://github.com/libretro/glsl-shaders) and each file keeps the license
 stated in its own header. As shipped here, that is:
 
@@ -25,10 +45,13 @@ stated in its own header. As shipped here, that is:
         barrel-distortion.glsl, bicubic.glsl, fast-sharpen.glsl,
         pixel_art_AA.glsl, scale3x.glsl
 
-    Public domain:
+    MIT (see perfect-retroshaders above):
         crt-perfect.glsl, crt-perfect-v2.glsl, crt-perfect-v3.glsl,
-        crt-perfect-v4.glsl, image-adjustment.glsl, lcd1x.glsl,
-        res-independent-scanlines.glsl,
+        crt-perfect-v4.glsl, crt-perfect-v5.glsl, crt-perfect-v5b.glsl,
+        lcd-perfect.glsl, pixel-perfect.glsl
+
+    Public domain:
+        image-adjustment.glsl, lcd1x.glsl, res-independent-scanlines.glsl,
         sharp-bilinear.glsl, sharp-shimmerless.glsl,
         sharp-shimmerless-grid.glsl, sharp-shimmerless-subpixel-vrgb.glsl
 
@@ -42,5 +65,6 @@ Individual copyright holders named in the shader headers include, among
 others, Team XBMC, Andrea Mazzoleni, guest(r), Fes, Gigaherz, jdgleaver and
 the libretro contributors.
 
-No shader source has been modified: the files are byte-identical copies, so
-what the lab compiles is exactly what NextUI compiles on the device.
+MIT is compatible with this project's GPL-3.0-or-later licensing: the
+combined work remains GPL-3.0-or-later, and the MIT files keep their own
+notice, which their headers carry verbatim.

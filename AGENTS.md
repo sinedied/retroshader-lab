@@ -22,14 +22,16 @@ npm run palette    # recolour a GB screenshot into a Gambatte palette
   (metadata merged from `public/samples/index.json`). Drop files in those folders and re-run it.
 - No test suite. Verification is typecheck + build + driving the real app in a browser.
 
-## NextUI is upstream
+## Two upstreams
 
-Everything under `public/shaders/` is a **byte-identical copy** from a local NextUI clone at
-`~/projects/NextUI`:
+Everything under `public/shaders/` is a **byte-identical copy** from one of two local clones. Both
+are re-synced regularly; keep them straight, because they have different licences.
+
+### 1. NextUI — `~/projects/NextUI` (GPL-3.0)
 
 | Here | Upstream |
 |---|---|
-| `public/shaders/glsl/` | `skeleton/BASE/Shaders/glsl/` |
+| `public/shaders/glsl/` (21 files) | `skeleton/BASE/Shaders/glsl/` |
 | `public/shaders/presets/` | `skeleton/BASE/Shaders/` (the `.cfg` tree, incl. `sets/`) |
 | `public/shaders/default.glsl` | `skeleton/SYSTEM/desktop/shaders/default.glsl` (final scale pass) |
 
@@ -41,14 +43,49 @@ cp ~/projects/NextUI/skeleton/BASE/Shaders/glsl/*.glsl public/shaders/glsl/
 npm run shaders
 ```
 
-**Presets reference shaders by filename.** Syncing presets without shaders ships configs that point
-to missing files — this happened mid-session when NextUI gained `crt-perfect-v2/v3`, then `v4`. After
-any sync, check every referenced shader exists:
+### 2. perfect-retroshaders — `~/projects/perfect-retroshaders` (MIT, the owner's own)
+
+The `crt-perfect` / `lcd-perfect` / `pixel-perfect` family. NextUI used to carry these as public
+domain and **no longer ships them at all**, so they are tracked from their own repo now. Do not
+expect to find them under `~/projects/NextUI`.
+
+```sh
+cp ~/projects/perfect-retroshaders/shaders/*.glsl public/shaders/glsl/
+npm run shaders
+```
+
+**That repo carries no `.cfg`,** so their presets are written here, one per shader, named after it.
+Every shader in that family documents its required pass settings in its own header, and so far all
+of them want the same thing — a NEAREST sampler and rendering at the final output resolution:
+
+```ini
+minarch_nrofshaders = 1
+minarch_shader1 = <name>.glsl
+minarch_shader1_filter = NEAREST
+minarch_shader1_srctype = source
+minarch_shader1_scaletype = source
+minarch_shader1_upscale = screen
+minarch_scale_filter = NEAREST
+```
+
+Read the header rather than copying this blindly: these shaders scale the image themselves, so a
+future one that wanted LINEAR, or an intermediate pass, would need something else.
+
+### After any sync, from either upstream
+
+**Presets reference shaders by filename**, and minarch resolves a missing one to *index 0* rather
+than erroring — so a bad reference silently loads whichever shader sorts first. Syncing presets
+without shaders once shipped exactly that, when NextUI gained `crt-perfect-v2/v3`, then `v4`. Always
+check:
 
 ```sh
 grep -rhoE 'minarch_shader[123] = .*' public/shaders/presets/ | sed 's/.*= //' | sort -u \
   | while read -r f; do [ -f "public/shaders/glsl/$f" ] || echo "MISSING: $f"; done
 ```
+
+Then give any newly added shader a preset, update `public/shaders/NOTICE` if the provenance or the
+licence of a file changed, and confirm in the browser that every shader still compiles — the Log tab
+should read "All shaders compiled".
 
 The pipeline semantics come from NextUI's C, not from guesswork:
 
