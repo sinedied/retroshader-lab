@@ -87,14 +87,14 @@ export interface Resolution {
   height: number;
 }
 
-/** Output resolutions: the lab default plus the resolutions NextUI devices run at. */
+/** Output resolutions, largest first: the lab default plus the resolutions real devices run at. */
 export const OUTPUT_PRESETS: Resolution[] = [
-  { label: '1024 × 768 (default, TrimUI Brick)', width: 1024, height: 768 },
-  { label: '1280 × 720 (TrimUI Smart Pro)', width: 1280, height: 720 },
+  { label: '3840 × 2160 (4K)', width: 3840, height: 2160 },
   { label: '1920 × 1080 (HDMI)', width: 1920, height: 1080 },
-  { label: '1280 × 960', width: 1280, height: 960 },
-  { label: '640 × 480', width: 640, height: 480 },
-  { label: '2048 × 1536 (1024 × 768 ×2)', width: 2048, height: 1536 }
+  { label: '1280 × 960 (RP Nova)', width: 1280, height: 960 },
+  { label: '1280 × 720 (TrimUI Smart Pro)', width: 1280, height: 720 },
+  { label: '1024 × 768 (default, TrimUI Brick)', width: 1024, height: 768 },
+  { label: '640 × 480 (RGxx)', width: 640, height: 480 }
 ];
 
 /** Common core aspect ratios reported by libretro cores. */
