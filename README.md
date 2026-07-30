@@ -4,13 +4,13 @@
 
 **A browser bench for authoring and testing [NextUI](https://github.com/LoveRetro/NextUI) GLSL retro shader pipelines.**
 
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
-![Lit](https://img.shields.io/badge/Lit-3-324FFF?style=flat-square&logo=lit&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![WebGL2](https://img.shields.io/badge/WebGL-2-990000?style=flat-square&logo=webgl&logoColor=white)
-![License](https://img.shields.io/badge/license-GPL--3.0--or--later-3DA639?style=flat-square)
+![Vite](https://img.shields.io/badge/Vite-8-ff6b5f?style=flat-square&logo=vite&logoColor=ff6b5f&labelColor=0a100d)
+![Lit](https://img.shields.io/badge/Lit-3-ffb454?style=flat-square&logo=lit&logoColor=ffb454&labelColor=0a100d)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-7dff9b?style=flat-square&logo=typescript&logoColor=7dff9b&labelColor=0a100d)
+![WebGL2](https://img.shields.io/badge/WebGL-2-7db4ff?style=flat-square&logo=webgl&logoColor=7db4ff&labelColor=0a100d)
+![License](https://img.shields.io/badge/license-GPL--3.0--or--later-a78bfa?style=flat-square&labelColor=0a100d)
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [CFG format](#cfg-format) · [Fidelity notes](#fidelity-notes) · [Project structure](#project-structure)
+[Features](#features) · [Quick start](#quick-start) · [How it works](#how-it-works) · [CFG format](#cfg-format) · [Credits](#credits--licensing)
 
 </div>
 
@@ -27,27 +27,13 @@ The pipeline is a port of NextUI's `generic_video.c` / `ma_config.c`: identical 
 ## Features
 
 - **1–3 shader passes** with the exact NextUI options: `filter`, `srctype`, `scaletype`, `upscale` (`1×`–`8×` or `screen`)
-- **27 stock shaders** — 21 from NextUI's `Shaders/glsl` and the 6 MIT `*-perfect` ones from
-  [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders) — plus **your own** added from a file or a URL
-- **27 stock presets** (`real-gameboy`, `crt-perfect`, `lcd-perfect`, `old-tv`, the per-system `sets/…`) loadable in one click
-- **Your own presets**, saved in the browser and listed above the stock ones, with rename, update and delete
-- **16 real game screenshots** at native resolution — 2 per platform, unfiltered, from libretro-thumbnails
-- **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps, saved with the preset
-- **NextUI screen scaling** — `Native`, `Aspect`, `Aspect (screen)`, `Fullscreen`, `Cropped` — with real letterboxing
-- **Generated test patterns** (1px grid, colour bars, dithered gradients) at console resolutions
-  (GB, GBC, GBA, NES, SNES, Mega Drive, PlayStation, PSP), or your own screenshots
-- **Pixel-honest viewport**: 1:1 by default, `Fit · 1:1 · 2:1 · 4:1` shortcuts and zoom up to 16× with
-  drag-to-pan, and **PNG export at 1:1**
-- **Compare up to 3 pipelines** — the one you are editing against the raw source, any stock preset or one of your own,
-  in two layouts: a movable **overlay** divider, or **side-by-side** columns that pan together
-- **Sizable comparison frame** (e.g. `1280×480`) that the render is cropped into and dragged around,
-  never scaled down, exported at exactly that size, with optional labels
-- **Foldable panels** and collapsible side rails (`[` and `]`), down to an icon-only toolbar on narrow screens
-- **Pass inspector** showing every intermediate render with its computed `InputSize` / `TextureSize` / `OutputSize`
-- **Live `.cfg`** you can edit, download, or load back — unknown keys (core options like `gambatte_*`) are preserved
-- **GLSL error panel** with the fully preprocessed source, line-numbered
-- **Share as a link** — the whole setup in a URL fragment; an unedited stock preset costs ~150 characters
-- Everything is persisted to `localStorage`
+- **27 stock shaders and presets** from NextUI and [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders), plus your own added from a file or a URL
+- **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps
+- **Real game screenshots** at native resolution, generated test patterns at console resolutions, or your own image
+- **Pixel-honest viewport** — 1:1 by default, zoom up to 16× with drag-to-pan, and PNG export at 1:1
+- **Compare up to 3 pipelines** under a movable overlay divider or as side-by-side columns that pan together
+- **Live `.cfg`** you can edit, download or load back — unknown keys (core options like `gambatte_*`) are preserved
+- **Share the whole setup as a link**, and save your own presets in the browser
 
 ## Quick start
 
