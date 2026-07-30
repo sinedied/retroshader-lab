@@ -1,6 +1,5 @@
-// lcd-perfect-v3 - a sinusoidal LCD mesh over a pixel-perfect scale.
+// lcd-perfect-v3 - an LCD matrix and RGB stripes over a pixel-perfect scale.
 // -----------------------------------------------------------------------------
-// Author:  sinedied
 // Licence: MIT - Copyright (c) 2026 sinedied
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -48,12 +47,12 @@
 // - A column mesh and the stripes share a pitch, so they multiply into a
 //   per-channel cast. It is divided out in closed form.
 
-#pragma parameter lp_grid       "Grid visibility"          0.37 0.00 1.00 0.01
-#pragma parameter lp_balance    "Row/column balance"       0.79 0.00 1.00 0.01
+#pragma parameter lp_grid       "Grid visibility"          0.30 0.00 1.00 0.01
+#pragma parameter lp_balance    "Row/column balance"       0.50 0.00 1.00 0.01
 #pragma parameter lp_min_pitch  "Minimum pitch in px"      3.00 2.00 6.00 0.25
 #pragma parameter lp_subpixels  "RGB stripe visibility"    0.20 0.00 1.00 0.05
 #pragma parameter lp_layout     "Stripe order 0=RGB 1=BGR" 0.00 0.00 1.00 1.00
-#pragma parameter lp_brightness "Brightness"               1.00 0.25 4.00 0.05
+#pragma parameter lp_brightness "Brightness"               1.20 0.25 4.00 0.05
 #pragma parameter lp_gamma      "Gamma"                    1.00 0.50 2.00 0.05
 
 #if defined(VERTEX)
@@ -134,7 +133,7 @@ uniform COMPAT_PRECISION float lp_layout;
 uniform COMPAT_PRECISION float lp_brightness;
 uniform COMPAT_PRECISION float lp_gamma;
 #else
-#define lp_grid 0.37
+#define lp_grid 0.34
 #define lp_balance 0.79
 #define lp_min_pitch 3.00
 #define lp_subpixels 0.20
@@ -199,13 +198,40 @@ void main()
     // evaluate a/b as a*rcp(b), so a pitch mathematically equal to lp_min_pitch
     // can land either side of it, and the regimes do not agree on contrast.
     // ------------------------------------------------------------------
-    vec2 srcPitch = 1.0 / d;
-    vec2 f        = 1.0 / max(srcPitch, vec2(lp_min_pitch));
-    vec2 locked   = 1.0 - smoothstep(lp_min_pitch * 1.001,
-                                     lp_min_pitch * 1.02, srcPitch);
+    // ------------------------------------------------------------------
+    // How many cells the mesh spans per period.
+    //
+    // One, while a cell is wide enough to carry a line. When it is not, the
+    // period grows to a whole number of cells rather than to a fixed size in
+    // output pixels. That distinction is the whole fix: a pattern pinned to
+    // output space stops tracking the source, and a two-dimensional one then
+    // interferes with the pixel blocks - a 3px mesh over 2px blocks measured a
+    // real 12px beat, and at 480x272 into 640x480 it was worse. crt-perfect
+    // escapes that only because its horizontal pattern is a colour mask and
+    // carries no luminance, so its luminance pattern is one-dimensional and has
+    // nothing to interfere in the other axis. A mesh has both axes and cannot
+    // borrow that.
+    //
+    // Staying on a whole number of cells keeps the pattern exactly periodic on
+    // the source grid, so it cannot beat against it at any scale, and the
+    // aperture-weighted blend below keeps working unchanged.
+    //
+    // ceil() on a division needs the bias: GPUs evaluate a/b as a*rcp(b), so a
+    // ratio mathematically equal to 1 can land a hair above it and jump the
+    // whole image to a two-cell period.
+    // ------------------------------------------------------------------
+    vec2 N = max(ceil(lp_min_pitch * d - 1e-4), 1.0);
 
+    vec2 f = d / N;
+
+    // Once a period spans several cells, only one boundary in N carries a line,
+    // so the same amplitude concentrates into a coarser, heavier pattern that
+    // has more room to interfere with the content. Easing it back over that
+    // range is what brings 480x272 into 640x480 from 0.94 to 0.34; N == 1, which
+    // is every ordinary case, is untouched. 1/N was measured too and buys
+    // another 0.1 of beat for noticeably less mesh at N == 2.
     vec2 amp = clamp(lp_grid * 2.0 * vec2(lp_balance, 1.0 - lp_balance), 0.0, 1.0)
-               * mix(nyquistFade(f), vec2(1.0), locked);
+               * nyquistFade(f) * (2.0 / (N + 1.0));
 
     // Half an output pixel, in cycles. It puts one sample per cycle on the
     // trough, which is what lets a two-pixel pitch resolve at all: sampling at
@@ -213,9 +239,8 @@ void main()
     // and they return the same value.
     vec2 phase = 0.5 * f;
 
-    // The pattern coordinate. With f == d this is exactly p, so the
-    // source-locked regime needs no separate code path.
-    vec2 t  = TEX0.xy * OutputSize * f;
+    // The pattern coordinate, in periods. With N == 1 this is exactly p.
+    vec2 t  = p / N;
     vec2 hh = 0.4995 * f;
 
     vec2 Alo = apertureIntegral(t - hh, amp, phase);
@@ -236,10 +261,9 @@ void main()
     // correlation is gone and plain area weights are the correct ones, so the
     // two are blended on the same regime term.
     // ------------------------------------------------------------------
-    vec2 AB  = B + amp * sin(TAU * phase) / TAU;
-    vec2 wAp = clamp((AB - Alo) / I, 0.0, 1.0);
-    vec2 wAr = clamp((B - p + h) / (2.0 * h), 0.0, 1.0);
-    vec2 w   = mix(wAp, wAr, locked);
+    vec2 Bt  = B / N;
+    vec2 AB  = Bt - amp * sin(TAU * (Bt - phase)) / TAU;
+    vec2 w   = clamp((AB - Alo) / I, 0.0, 1.0);
 
     vec2 lo = (B - 0.5) / TextureSize;
     vec2 hi = (B + 0.5) / TextureSize;
@@ -276,8 +300,8 @@ void main()
     // ------------------------------------------------------------------
     vec3 stripe = vec3(1.0);
     if (lp_subpixels > 0.0) {
-        float sinc = mix(boxSinc(f.x), 1.0, locked.x);
-        float ac   = lp_subpixels * sinc * mix(nyquistFade(f).x, 1.0, locked.x);
+        float sinc = boxSinc(f.x);
+        float ac   = lp_subpixels * sinc * nyquistFade(f).x;
         vec2 rg = 1.0 + ac * cos(TAU * (t.x - phase.x - (1.0 / 6.0)
                                         - vec2(0.0, 1.0 / 3.0)));
         stripe = vec3(rg, 3.0 - rg.x - rg.y);
@@ -301,11 +325,22 @@ void main()
         // amplitude has to be the box-filtered one, not the nominal one, or the
         // correction overshoots wherever the filter is biting.
         // --------------------------------------------------------------
+        // The stripe argument already carries -phase, and the mesh trough is
+        // at phase, so the phase cancels out of the difference between them.
+        // Subtracting it a second time here is what an earlier version did, and
+        // it rotated the correction off the symmetry: red and blue stopped
+        // matching, which put a cast in that flipped sign with the stripe
+        // order - the exact fault being corrected for.
         float M = amp.x * sinc;
         vec3 corr = 1.0 - 0.5 * M * ac
-                    * cos(TAU * (vec3(0.0, 1.0 / 3.0, 2.0 / 3.0) + (1.0 / 6.0)
-                                 - phase.x));
-        stripe /= max(corr, 1e-3);
+                    * cos(TAU * (vec3(0.0, 1.0 / 3.0, 2.0 / 3.0) + (1.0 / 6.0)));
+        // The square root is not decoration. That closed form is the cast in
+        // linear light, but what is seen - and measured - is the encoded value,
+        // and sqrt() below halves any relative deviation on the way there. So
+        // the correction has to be halved too, which is what taking its square
+        // root does. Applying it whole overshoots to the opposite sign: green
+        // went from 3 levels bright to 3.4 levels dark.
+        stripe /= sqrt(max(corr, 1e-3));
 
         if (lp_layout >= 0.5) {
             stripe = stripe.bgr;
