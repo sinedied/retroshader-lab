@@ -4,3 +4,6 @@ src/generated/
 *.local
 .DS_Store
 .vite/
+
+# personal working notes, deliberately not in the repo
+TODO
