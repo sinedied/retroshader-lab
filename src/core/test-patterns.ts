@@ -36,12 +36,13 @@ export function aspectOfSystem(id: string): number {
   return SYSTEM_RESOLUTIONS.find((system) => system.id === id)?.aspect ?? 4 / 3;
 }
 
-export type PatternKind = 'grid' | 'colorbars' | 'gradient';
+export type PatternKind = 'grid' | 'colorbars' | 'gradient' | 'white';
 
 export const PATTERN_KINDS: { id: PatternKind; label: string }[] = [
   { id: 'grid', label: '1px grid & checkerboard' },
   { id: 'colorbars', label: 'Color bars & ramps' },
-  { id: 'gradient', label: 'Dithered gradients' }
+  { id: 'gradient', label: 'Dithered gradients' },
+  { id: 'white', label: 'Pure white' }
 ];
 
 function fillRect(
@@ -142,6 +143,11 @@ export function createTestPattern(
       break;
     case 'gradient':
       drawGradient(ctx, width, height);
+      break;
+    case 'white':
+      // a flat full-white field: the shader's own pattern is all that is left, which is
+      // what makes a mask, a grid or a scanline measurable on its own
+      fillRect(ctx, 0, 0, width, height, '#ffffff');
       break;
     default:
       drawGrid(ctx, width, height);
