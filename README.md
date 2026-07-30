@@ -27,12 +27,12 @@ The pipeline is a port of NextUI's `generic_video.c` / `ma_config.c`: identical 
 ## Features
 
 - **1–3 shader passes** with the exact NextUI options: `filter`, `srctype`, `scaletype`, `upscale` (`1×`–`8×` or `screen`)
-- **27 stock shaders and presets** from NextUI and [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders), plus your own added from a file or a URL
+- **Stock shaders and presets** from NextUI and [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders), plus your own added from a file or a URL
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps
 - **Real game screenshots** at native resolution, generated test patterns at console resolutions, or your own image
 - **Pixel-honest viewport** — 1:1 by default, zoom up to 16× with drag-to-pan, and PNG export at 1:1
 - **Compare up to 3 pipelines** under a movable overlay divider or as side-by-side columns that pan together
-- **Live `.cfg`** you can edit, download or load back — unknown keys (core options like `gambatte_*`) are preserved
+- **Live `.cfg`** you can edit, download or load back
 - **Share the whole setup as a link**, and save your own presets in the browser
 
 ## Quick start
