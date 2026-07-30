@@ -1,5 +1,6 @@
-// crt-perfect - scanlines and an RGB mask over a pixel-perfect scale.
+// crt-perfect-v8 - scanlines, an RGB mask and curvature, pixel-perfect.
 // -----------------------------------------------------------------------------
+// Author:  sinedied
 // Licence: MIT - Copyright (c) 2026 sinedied
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,27 +19,33 @@
 //   cp_rgb_mask    0.00 - 1.00  RGB mask visibility. 0 disables it.
 //   cp_mask_type   0 / 1 / 2    Off, aperture grille, slot grille.
 //   cp_mask_size   0.25 - 2.00  Mask triads per source pixel.
-//   cp_brightness  0.25 - 4.00  Output gain, compensates the darkening.
 //   cp_min_pitch   2.00 - 6.00  Smallest pattern pitch, in output pixels.
+//   cp_curvature   0.00 - 0.15  Screen curvature. 0 disables it.
+//   cp_brightness  0.25 - 4.00  Output gain, compensates the darkening.
 //   cp_gamma       0.50 - 2.00  Output gamma. 1.00 disables it.
 // -----------------------------------------------------------------------------
 // Scales the source into uniform pixel blocks, then modulates it with two pure
 // sinusoids: one across the source lines, one across the source columns in
 // three colour phases. Both are band-limited, so neither beats against the
-// pixel grid. The scanline count follows the source resolution, falling back to
-// a fixed cp_min_pitch once the output has no room for one line each.
+// pixel grid. cp_curvature bends the image onto a tube, and the patterns curve
+// with the glass the way a real mask and beam do.
 //
 // Notes:
 // - Render at the output resolution, 1:1 with the display.
 // - At cp_min_pitch 2.00 the mask degenerates to two-colour columns: use 2.50
 //   or more to keep the triads visible.
+// - Curvature crops nothing: the picture reaches all four screen edges and only
+//   the tube's rounded corners are left black, about 4% of the screen at 0.10.
+// - Curvature softens the patterns where the output is too small to lock them,
+//   since a pattern that follows the glass cannot also follow the pixel grid.
 
 #pragma parameter cp_scanlines  "Scanline visibility"        0.55 0.00 1.00 0.05
 #pragma parameter cp_rgb_mask   "RGB mask visibility"        0.40 0.00 1.00 0.05
 #pragma parameter cp_mask_type  "Mask 0=off 1=grille 2=slot" 1.00 0.00 2.00 1.00
 #pragma parameter cp_mask_size  "Mask triads per pixel"      1.00 0.25 2.00 0.25
-#pragma parameter cp_brightness "Brightness"                 1.25 0.25 4.00 0.05
 #pragma parameter cp_min_pitch  "Min. pitch in px"           3.00 2.00 6.00 0.25
+#pragma parameter cp_curvature  "Screen curvature"           0.00 0.00 0.15 0.01
+#pragma parameter cp_brightness "Brightness"                 1.25 0.25 4.00 0.05
 #pragma parameter cp_gamma      "Gamma"                      1.00 0.50 2.00 0.05
 
 #if defined(VERTEX)
@@ -126,6 +133,7 @@ uniform COMPAT_PRECISION float cp_mask_size;
 uniform COMPAT_PRECISION float cp_brightness;
 uniform COMPAT_PRECISION float cp_min_pitch;
 uniform COMPAT_PRECISION float cp_gamma;
+uniform COMPAT_PRECISION float cp_curvature;
 #else
 #define cp_scanlines 0.55
 #define cp_rgb_mask 0.40
@@ -134,6 +142,7 @@ uniform COMPAT_PRECISION float cp_gamma;
 #define cp_brightness 1.25
 #define cp_min_pitch 3.0
 #define cp_gamma 1.0
+#define cp_curvature 0.0
 #endif
 
 // Exact average of a unit-amplitude sinusoid of frequency f, in cycles per output
@@ -155,131 +164,127 @@ void main()
 {
     vec2 texelSize = SourceSize.zw;
 
-    // ------------------------------------------------------------------
-    // Area-averaged upscale, straight to the output size. Each output pixel
-    // integrates the source over its own footprint, so source pixels come out as
-    // uniform blocks with a single soft pixel wherever a block boundary falls
-    // between two output pixels; integer scale factors stay exact.
+    // Curvature, normalised so the screen corners land exactly on the image
+    // corners. The divisor IS the zoom: no solving, no black frame, and the
+    // whole screen stays covered.
+    // Barrel distortion. The warp itself is c * (1 + k*r2); what it is divided
+    // by is the entire design decision, and it is not obvious from the algebra.
     //
-    // The average is taken on the encoded values, not on linear light. That is
-    // what keeps the result free of moire: a source pixel covers three or four
-    // output pixels at a non-integer scale, so the number of partial-coverage
-    // pixels varies from block to block, and any non-linearity applied across the
-    // blend gives those pixels a coverage-dependent shift that beats.
-    // ------------------------------------------------------------------
+    //   nothing        the image shrinks into a barrel and there is black on all
+    //                  four sides
+    //   (1 + 2k)       the CORNER value, so the corners sit at 1:1 and the whole
+    //                  border is cropped off-screen. The curved edge is the cue
+    //                  that reads as a tube, so losing it leaves only the middle
+    //                  magnification, which looks like a lens bump
+    //   (1 + k)        the EDGE-MIDPOINT value, used here. r2 is 1 at an edge
+    //                  midpoint, so the factor is exactly 1 and the image edge
+    //                  lands on the screen edge. At a corner r2 is 2, the factor
+    //                  exceeds 1, and the sample falls outside the image - which
+    //                  is the tube's rounded corner
+    //
+    // So nothing is ever cropped, the picture reaches all four screen edges, and
+    // the only black left is in the corners. Both axes normalise by the same
+    // constant, so this is symmetric at any aspect ratio.
+    vec2  uv   = vTexCoord;
+    vec2  jac  = vec2(1.0);
+    float tube = 1.0;
+    float jmax = 1.0;
+    float noWarp = 1.0;
+
+    if (cp_curvature > 0.0) {
+        float norm = 1.0 / (1.0 + cp_curvature);
+        vec2  c    = uv * 2.0 - 1.0;
+        vec2  cc   = c * c;
+        float r2   = cc.x + cc.y;
+
+        uv  = c * (1.0 + cp_curvature * r2) * norm * 0.5 + 0.5;
+        jac = (1.0 + cp_curvature * (vec2(3.0, 1.0) * cc.x
+                                   + vec2(1.0, 3.0) * cc.y)) * norm;
+        jmax = (1.0 + 4.0 * cp_curvature) * norm;
+        noWarp = 0.0;
+
+        // The corners reach past the image, so they have to be masked rather
+        // than left to the sampler: it clamps to edge, which stretches the
+        // border texel across the whole corner instead of showing nothing.
+        // Faded over one output pixel so the curve does not stair-step.
+        vec2 e  = outsize.zw;
+        vec2 aa = smoothstep(vec2(0.0), e, uv) * smoothstep(vec2(0.0), e, 1.0 - uv);
+        tube = aa.x * aa.y;
+    }
+
     vec2 range = vec2(abs(InputSize.x / (outsize.x * SourceSize.x)),
                       abs(InputSize.y / (outsize.y * SourceSize.y)));
-    range = range / 2.0 * 0.999;
+    range = range / 2.0 * 0.999 * jac;
 
-    float left   = vTexCoord.x - range.x;
-    float top    = vTexCoord.y + range.y;
-    float right  = vTexCoord.x + range.x;
-    float bottom = vTexCoord.y - range.y;
+    float left   = uv.x - range.x;
+    float top    = uv.y + range.y;
+    float right  = uv.x + range.x;
+    float bottom = uv.y - range.y;
 
     vec3 topLeft     = COMPAT_TEXTURE(Source, (floor(vec2(left,  top)    / texelSize) + 0.5) * texelSize).rgb;
     vec3 bottomRight = COMPAT_TEXTURE(Source, (floor(vec2(right, bottom) / texelSize) + 0.5) * texelSize).rgb;
     vec3 bottomLeft  = COMPAT_TEXTURE(Source, (floor(vec2(left,  bottom) / texelSize) + 0.5) * texelSize).rgb;
     vec3 topRight    = COMPAT_TEXTURE(Source, (floor(vec2(right, top)    / texelSize) + 0.5) * texelSize).rgb;
 
-    vec2 border = clamp(floor((vTexCoord / texelSize) + vec2(0.5)) * texelSize,
+    vec2 border = clamp(floor((uv / texelSize) + vec2(0.5)) * texelSize,
                         vec2(left, bottom), vec2(right, top));
 
-    // The footprint is a rectangle, so the four corner areas factor into one
-    // horizontal and one vertical weight.
     float wLeft = (border.x - left) / (2.0 * range.x);
     float wTop  = (top - border.y)  / (2.0 * range.y);
 
     vec3 color = mix(mix(bottomRight, bottomLeft, wLeft),
                      mix(topRight,    topLeft,    wLeft), wTop);
 
-    // Gamma on the scaled image, before the patterns are applied. The branch is
-    // uniform across the draw, so a gamma of 1 costs nothing. The base is clamped
-    // because pow(0, g) is undefined and returns NaN on some drivers, and the
-    // floor is small enough that pure black still encodes to 0 at any gamma.
     if (abs(cp_gamma - 1.0) > 0.001) {
         color = pow(max(color, 1e-8), vec3(cp_gamma));
     }
 
-    // ------------------------------------------------------------------
-    // Scanlines. One cycle per source line while there is room for it, so the
-    // count is the source vertical resolution; below cp_min_pitch output pixels
-    // per line the pattern moves to output space at exactly cp_min_pitch and is
-    // phase-aligned to the pixel grid.
-    //
-    // A grid-locked pattern repeats over a whole number of pixels and therefore
-    // cannot alias, so neither the box filter nor the Nyquist fade applies to it.
-    // The half-pixel shift puts one sample per cycle on the trough, which is what
-    // lets a two-pixel pitch resolve at full contrast: sampling at pixel centres
-    // instead would place both samples symmetrically about the peak, and they
-    // would return the same value.
-    //
-    // The regime blend is a narrow smoothstep rather than a comparison. GPUs
-    // evaluate a/b as a*rcp(b), so a source pitch mathematically equal to
-    // cp_min_pitch can land a few ULP either side of it, and the two regimes
-    // differ in contrast by about 30%. The window is biased so equality is fully
-    // grid-locked, and is far wider than the error.
-    // ------------------------------------------------------------------
+    // The patterns are positioned in tube space, so they curve with the glass
+    // the way a real mask and a real beam do. The floor is lifted by jmax so
+    // that even the most magnified corner keeps cp_min_pitch output pixels per
+    // cycle, which is what keeps the band-limiting from ever having to fade.
     float scanSrcPitch = OutputSize.y / max(InputSize.y, 1.0);
-    float scanPitch    = max(scanSrcPitch, cp_min_pitch);
-    float scanLocked   = 1.0 - smoothstep(cp_min_pitch * 1.001, cp_min_pitch * 1.02, scanSrcPitch);
+    float scanPitch    = max(scanSrcPitch, cp_min_pitch * jmax);
+    float scanLocked   = (1.0 - smoothstep(cp_min_pitch * 1.001, cp_min_pitch * 1.02, scanSrcPitch)) * noWarp;
     float scanFreq     = 1.0 / scanPitch;
+    float scanLocal    = scanFreq * jac.y;
 
-    float scanAmp = cp_scanlines * mix(nyquistFade(scanFreq), 1.0, scanLocked);
-    float scanAC  = 0.5 * scanAmp * mix(boxSinc(scanFreq), 1.0, scanLocked);
+    float scanAmp = cp_scanlines * mix(nyquistFade(scanLocal), 1.0, scanLocked);
+    float scanAC  = 0.5 * scanAmp * mix(boxSinc(scanLocal), 1.0, scanLocked);
 
     float scan = 1.0;
     if (scanAmp > 0.0) {
-        float y = vTexCoord.y * OutputSize.y - 0.5 * scanLocked;
-        // fract() keeps the cosine argument small; the phase reaches several
-        // hundred cycles before it, which costs precision otherwise
+        float y = uv.y * OutputSize.y - 0.5 * scanLocked;
         scan = (1.0 - 0.5 * scanAmp) - scanAC * cos(TAU * fract(y * scanFreq));
     }
 
-    // ------------------------------------------------------------------
-    // RGB mask, on the same two regimes. Three primaries 120 degrees apart sum to
-    // a constant, so the mask is luminance neutral and casts no colour - which
-    // also lets blue be derived from red and green rather than costing a third
-    // cosine. The -1/6 offset centres the triad on its cell, putting red at 1/6,
-    // green at 1/2 and blue at 5/6 across it.
-    // ------------------------------------------------------------------
     float maskSrcPitch = OutputSize.x / max(InputSize.x * cp_mask_size, 1.0);
-    float maskPitch    = max(maskSrcPitch, cp_min_pitch);
-    float maskLocked   = 1.0 - smoothstep(cp_min_pitch * 1.001, cp_min_pitch * 1.02, maskSrcPitch);
+    float maskPitch    = max(maskSrcPitch, cp_min_pitch * jmax);
+    float maskLocked   = (1.0 - smoothstep(cp_min_pitch * 1.001, cp_min_pitch * 1.02, maskSrcPitch)) * noWarp;
     float maskFreq     = 1.0 / maskPitch;
+    float maskLocal    = maskFreq * jac.x;
 
-    float maskAmp = cp_rgb_mask * mix(nyquistFade(maskFreq), 1.0, maskLocked);
+    float maskAmp = cp_rgb_mask * mix(nyquistFade(maskLocal), 1.0, maskLocked);
 
     vec3 mask = vec3(1.0);
     if (maskAmp > 0.0 && cp_mask_type >= 0.5) {
-        float x = vTexCoord.x * OutputSize.x - 0.5 * maskLocked;
+        float x = uv.x * OutputSize.x - 0.5 * maskLocked;
         float phase = x * maskFreq - (1.0 / 6.0);
 
-        // Offset grille: stagger the triads by half a cell on alternate lines of
-        // the scanline grid. The epsilon keeps floor() off its exact boundary,
-        // which its argument crosses once per line; without it a few ULP flip a
-        // whole row's stagger. Note the vertical separation that makes this read
-        // as slots comes from the scanlines, so it needs cp_scanlines above 0.
         if (cp_mask_type >= 1.5) {
-            float row = floor((vTexCoord.y * OutputSize.y - 0.5 * scanLocked) * scanFreq + 1e-3);
+            float row = floor((uv.y * OutputSize.y - 0.5 * scanLocked) * scanFreq + 1e-3);
             phase += 0.5 * mod(row, 2.0);
         }
 
         float dc = 1.0 - 0.5 * maskAmp;
-        float ac = 0.5 * maskAmp * mix(boxSinc(maskFreq), 1.0, maskLocked);
+        float ac = 0.5 * maskAmp * mix(boxSinc(maskLocal), 1.0, maskLocked);
         mask.rg = dc + ac * cos(TAU * (fract(phase) - vec2(0.0, 1.0 / 3.0)));
-        // analytically non-negative, but keep it off sqrt()'s undefined domain
         mask.b  = max(3.0 * dc - mask.r - mask.g, 0.0);
     }
 
-    // ------------------------------------------------------------------
-    // The colour is still encoded, and the encoding is treated as a gamma of 2,
-    // so sqrt(linear * m) == encoded * sqrt(m). One square root therefore
-    // replaces the whole decode, modulate and re-encode round trip while leaving
-    // the modulation itself in linear light, where it belongs.
-    // ------------------------------------------------------------------
     vec3 gain = sqrt(max(mask * (scan * cp_brightness), 0.0));
 
-    FragColor = vec4(clamp(color * gain, 0.0, 1.0), 1.0);
+    FragColor = vec4(clamp(color * gain * tube, 0.0, 1.0), 1.0);
 }
 
 #endif

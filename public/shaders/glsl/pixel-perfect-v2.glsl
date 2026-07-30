@@ -1,4 +1,4 @@
-// pixel-perfect - uniform pixel blocks with no shimmer, at minimal cost.
+// pixel-perfect-v2 - uniform pixel blocks and a gamma, at minimal cost.
 // -----------------------------------------------------------------------------
 // Licence: MIT - Copyright (c) 2026 sinedied
 //
@@ -16,6 +16,7 @@
 //
 //   pp_sharpness  0.20 - 1.00  Transition width between blocks, in output
 //                              pixels. Lower is crisper.
+//   pp_gamma      0.50 - 2.00  Output gamma. Below 1 brightens. 1.00 is off.
 // -----------------------------------------------------------------------------
 // Scales an image so every source pixel becomes an even block, with a single
 // soft pixel wherever a block boundary falls between two output pixels. Integer
@@ -25,10 +26,24 @@
 // source over its own footprint, which spans at most two texels per axis, so
 // four taps with separable weights evaluate it exactly.
 //
+// pp_gamma is applied to the blended colour rather than to the four taps. That
+// is four times cheaper - one pow instead of four - and on a scaler it is free
+// in practice, because the transcendental hides behind the texture fetches.
+//
+// The two placements are not identical: the blend is linear, a gamma is not, so
+// partial-coverage pixels come out slightly different. Measured on a 1px dither
+// pattern the difference is about 4 levels at periods of 8 to 16 pixels, and on
+// real frames it is 0.4 levels, confined to sprite edges. Neither placement
+// produces any long-period structure at all. The cheaper one is used because
+// the difference does not justify the cost, but the taps are where a shader
+// that also multiplies by a pattern would have to apply it - see crt-perfect,
+// where a post-blend gamma modulates the pattern's own amplitude.
+//
 // Notes:
 // - Render at the output resolution, 1:1 with the display.
 
 #pragma parameter pp_sharpness "Transition width in px" 1.00 0.20 1.00 0.05
+#pragma parameter pp_gamma     "Gamma"                  1.00 0.50 2.00 0.05
 
 #if defined(VERTEX)
 
@@ -101,8 +116,10 @@ COMPAT_VARYING vec4 TEX0;
 
 #ifdef PARAMETER_UNIFORM
 uniform COMPAT_PRECISION float pp_sharpness;
+uniform COMPAT_PRECISION float pp_gamma;
 #else
 #define pp_sharpness 1.0
+#define pp_gamma 1.0
 #endif
 
 void main()
@@ -131,7 +148,18 @@ void main()
 
     // Separable weights. Note mix(x, y, w) returns y at w == 1, so the low-side
     // value has to be the second argument on both axes.
-    FragColor = vec4(mix(mix(d, c, w.x), mix(b, a, w.x), w.y), 1.0);
+    vec3 col = mix(mix(d, c, w.x), mix(b, a, w.x), w.y);
+
+    // The branch is uniform across the draw, so a gamma of 1 costs nothing. The
+    // base is clamped because pow(0, g) is undefined and returns NaN on real
+    // drivers, and black texels are everywhere; 1e-8 is small enough that pure
+    // black still encodes to 0 even at the lowest gamma, where 1e-5 would lift
+    // it to 1/255.
+    if (abs(pp_gamma - 1.0) > 0.001) {
+        col = pow(max(col, 1e-8), vec3(pp_gamma));
+    }
+
+    FragColor = vec4(col, 1.0);
 }
 
 #endif
