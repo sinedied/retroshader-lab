@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import { panelStyles } from './shared-styles.js';
 import {
   NOISE_THRESHOLD,
@@ -186,6 +186,8 @@ export class RslBenchmark extends LitElement {
   @property({ type: String }) quality: BenchmarkQuality = 'standard';
   @property({ type: String }) note = '';
 
+  @state() private copied: 'idle' | 'ok' | 'fail' = 'idle';
+
   @query('dialog') private dialog!: HTMLDialogElement;
 
   show(): void {
@@ -200,20 +202,64 @@ export class RslBenchmark extends LitElement {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 
+  /** The pass count and shader chain, shared so the table and the markdown cannot drift. */
+  private static passSummary(result: BenchmarkResult): string {
+    const chain = result.shaders.length > 0 ? result.shaders.join(' → ') : 'no shader';
+    return `${result.shaders.length} pass${result.shaders.length === 1 ? '' : 'es'} · ${chain}`;
+  }
+
+  /**
+   * The results as a markdown table of pipeline against relative performance. Perf. is
+   * the figure worth sharing: the absolute milliseconds only mean anything on the GPU
+   * that produced them.
+   */
+  private markdownTable(): string {
+    const rows = this.results.map((result) => [
+      // the label alone is just a preset name; the pass chain is what actually identifies
+      // what was measured, and it is what the dialog shows under the name. A label is
+      // user-supplied, and a bare pipe in one would split the cell.
+      `${result.label} · ${RslBenchmark.passSummary(result)}`.replace(/\|/g, '\\|'),
+      Number.isFinite(result.percent) ? `${result.percent.toFixed(0)}%` : '—'
+    ]);
+    const header = ['Pipeline', 'Perf.'];
+    // padded so the raw text stays readable, not only the rendered table
+    const width = [header, ...rows].reduce(
+      (widest, row) => row.map((cell, i) => Math.max(widest[i] ?? 0, [...cell].length)),
+      [0, 0]
+    );
+    const line = (cells: string[]) =>
+      `| ${cells.map((cell, i) => cell.padEnd(width[i])).join(' | ')} |`;
+
+    return [
+      line(header),
+      `| ${width.map((w) => '-'.repeat(w)).join(' | ')} |`,
+      ...rows.map(line)
+    ].join('\n');
+  }
+
+  private async copyMarkdown(): Promise<void> {
+    if (this.results.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(this.markdownTable());
+      this.copied = 'ok';
+    } catch {
+      // the clipboard needs a secure context and permission; say so rather than
+      // resetting to idle, which would read as a dead button
+      this.copied = 'fail';
+    }
+    setTimeout(() => (this.copied = 'idle'), 1800);
+  }
+
   private renderRow(result: BenchmarkResult, index: number) {
     const reference = index === 0;
     const slower = !reference && result.percent < 99.5;
     const faster = !reference && result.percent > 100.5;
-    const shaders = result.shaders.length > 0 ? result.shaders.join(' → ') : 'no shader';
 
     return html`
       <tr class=${reference ? 'reference' : faster ? 'faster' : slower ? 'slower' : ''}>
         <td class="name">
           ${result.label}
-          <small
-            >${result.shaders.length} pass${result.shaders.length === 1 ? '' : 'es'} ·
-            ${shaders}</small
-          >
+          <small>${RslBenchmark.passSummary(result)}</small>
         </td>
         <td class="num">
           ${Number.isFinite(result.median) ? result.median.toFixed(3) : '—'}
@@ -303,6 +349,17 @@ export class RslBenchmark extends LitElement {
         <div class="foot">
           <button class="primary" ?disabled=${this.running} @click=${() => this.emit('benchmark-rerun')}>
             ↻ Run again
+          </button>
+          <button
+            ?disabled=${this.running || this.results.length === 0}
+            title="Copy the pipeline and Perf. columns as a markdown table"
+            @click=${this.copyMarkdown}
+          >
+            ${this.copied === 'ok'
+              ? '✓ Copied'
+              : this.copied === 'fail'
+                ? '✕ Blocked'
+                : '⧉ Copy markdown'}
           </button>
           <label class="quality">
             <span>Samples</span>
