@@ -142,5 +142,23 @@
     "width": 480,
     "height": 272,
     "source": "libretro-thumbnails/Sony_-_PlayStation_Portable/Named_Snaps/Patapon (USA).png"
+  },
+  {
+    "file": "p8-celeste.png",
+    "system": "p8",
+    "platform": "PICO-8",
+    "title": "Celeste Classic",
+    "width": 128,
+    "height": 128,
+    "source": "captured in PICO-8 at native resolution"
+  },
+  {
+    "file": "p8-slipways.png",
+    "system": "p8",
+    "platform": "PICO-8",
+    "title": "Slipways",
+    "width": 128,
+    "height": 128,
+    "source": "captured in PICO-8 at native resolution"
   }
 ]

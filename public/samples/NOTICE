@@ -1,7 +1,7 @@
 RetroShader Lab — notice for public/samples
 ===========================================
 
-The screenshots in this directory are in-game snapshots taken from the
+Most of the screenshots in this directory are in-game snapshots taken from the
 libretro-thumbnails project:
 
     https://github.com/libretro-thumbnails/libretro-thumbnails
@@ -21,12 +21,22 @@ accurate inputs for testing shader pipelines:
 The exact upstream path of every file is recorded in index.json.
 No image has been resized, cropped or re-encoded.
 
+The two PICO-8 screenshots are the exception: libretro-thumbnails carries no
+PICO-8 set, so p8-celeste.png and p8-slipways.png were captured directly in
+PICO-8 by this project's author, at the console's native 128x128. Every pixel in
+both is one of the sixteen colours of the PICO-8 palette, which is what a capture
+at native resolution looks like and an upscaled one does not.
+
+    PICO-8                      128x128
+
 Copyright
 ---------
 These images depict copyrighted works. Each screenshot remains the property of
 the respective game's copyright holders and publishers; they are included here
 solely as reference material for evaluating video shaders, and are not covered
-by the GPL that applies to the rest of this project.
+by the GPL that applies to the rest of this project. That applies to the PICO-8
+captures as much as to the rest: Celeste Classic is by Maddy Thorson and Noel
+Berry, and Slipways by Jakub Wasilewski (Krajzeg).
 
 If you are a rights holder and want an image removed, delete the file from this
 directory and its entry from index.json — the lab falls back to its built-in
