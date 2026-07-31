@@ -227,6 +227,17 @@ export class RslViewport extends LitElement {
         z-index: 5;
         display: grid;
         place-items: center;
+        /* a handle carries the colour of the pane it introduces, so it reads as belonging
+           to the pane on its right the way that pane's label does */
+        --edge: var(--amber);
+        --edge-line: rgba(255, 180, 84, 0.9);
+        --edge-grip: rgba(255, 180, 84, 0.7);
+      }
+
+      .divider.c {
+        --edge: #7db4ff;
+        --edge-line: rgba(125, 180, 255, 0.9);
+        --edge-grip: rgba(125, 180, 255, 0.7);
       }
 
       .divider.movable {
@@ -239,8 +250,8 @@ export class RslViewport extends LitElement {
         top: 0;
         bottom: 0;
         width: 1px;
-        background: var(--amber);
-        box-shadow: 0 0 12px rgba(255, 180, 84, 0.9);
+        background: var(--edge);
+        box-shadow: 0 0 12px var(--edge-line);
       }
 
       .divider.fixed::before {
@@ -253,8 +264,8 @@ export class RslViewport extends LitElement {
         width: 5px;
         height: 34px;
         border-radius: 3px;
-        background: var(--amber);
-        box-shadow: 0 0 10px rgba(255, 180, 84, 0.7);
+        background: var(--edge);
+        box-shadow: 0 0 10px var(--edge-grip);
       }
 
       .status {
@@ -1063,7 +1074,9 @@ export class RslViewport extends LitElement {
         ${dividers.map(
           (position, index) => html`
             <div
-              class="divider ${this.compareMode === 'overlay' ? 'movable' : 'fixed'}"
+              class="divider ${this.compareMode === 'overlay' ? 'movable' : 'fixed'} ${index === 1
+                ? 'c'
+                : ''}"
               style=${`left:${(position * 100).toFixed(4)}%`}
               @pointerdown=${(e: PointerEvent) =>
                 this.compareMode === 'overlay' ? this.onDividerDrag(e, index) : undefined}
