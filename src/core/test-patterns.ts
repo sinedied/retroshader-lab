@@ -23,6 +23,7 @@ export const SYSTEM_RESOLUTIONS: SystemResolution[] = [
   { id: 'gb', label: 'Game Boy', width: 160, height: 144, aspect: 10 / 9 },
   { id: 'gbc', label: 'Game Boy Color', width: 160, height: 144, aspect: 10 / 9 },
   { id: 'gba', label: 'Game Boy Advance', width: 240, height: 160, aspect: 3 / 2 },
+  { id: 'p8', label: 'PICO-8', width: 128, height: 128, aspect: 1 },
   // consoles stretch non-square pixels to 4:3 on a TV
   { id: 'nes', label: 'NES / Famicom', width: 256, height: 240, aspect: 4 / 3 },
   { id: 'snes', label: 'SNES / Super Famicom', width: 256, height: 224, aspect: 4 / 3 },
