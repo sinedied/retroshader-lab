@@ -8,7 +8,7 @@
 ![Lit](https://img.shields.io/badge/Lit-3-ffb454?style=flat-square&logo=lit&logoColor=ffb454&labelColor=0a100d)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-7dff9b?style=flat-square&logo=typescript&logoColor=7dff9b&labelColor=0a100d)
 ![WebGL2](https://img.shields.io/badge/WebGL-2-7db4ff?style=flat-square&logo=webgl&logoColor=7db4ff&labelColor=0a100d)
-![License](https://img.shields.io/badge/license-GPL--3.0--or--later-a78bfa?style=flat-square&labelColor=0a100d)
+![License](https://img.shields.io/badge/license-GPL--3.0-a78bfa?style=flat-square&labelColor=0a100d)
 
 [Features](#features) · [Quick start](#quick-start) · [How it works](#how-it-works) · [CFG format](#cfg-format) · [Credits](#credits--licensing)
 
