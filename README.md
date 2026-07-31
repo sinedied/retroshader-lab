@@ -79,7 +79,10 @@ While comparing, **Export PNG 1:1** writes the comparison exactly as laid out. *
 
 ### Presets
 
-The stock configs are bundled in `public/shaders/presets/`. Pick one in the **Presets** dropdown of the cfg panel and the whole pipeline — passes, filters, scaling and shader parameters — is applied at once.
+The stock configs are bundled in `public/shaders/presets/`, grouped into `nextui/`, `sets/`,
+`perfect-retroshaders/` and `other/`. Pick one in the **Presets** dropdown of the cfg panel — the
+groups match those folders — and the whole pipeline — passes, filters, scaling and shader
+parameters — is applied at once.
 
 **Save preset** stores the pipeline you are working on in the browser as a user preset. Your presets are listed first, above the stock ones, and can be renamed, updated to the current pipeline or deleted. A dot next to the name means the pipeline has diverged from what was saved.
 

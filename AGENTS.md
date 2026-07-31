@@ -32,16 +32,22 @@ are re-synced regularly; keep them straight, because they have different licence
 | Here | Upstream |
 |---|---|
 | `public/shaders/glsl/` (21 files) | `skeleton/BASE/Shaders/glsl/` |
-| `public/shaders/presets/` | `skeleton/BASE/Shaders/` (the `.cfg` tree, incl. `sets/`) |
+| `public/shaders/presets/nextui/` | `skeleton/BASE/Shaders/*.cfg` (the root configs) |
+| `public/shaders/presets/sets/` | `skeleton/BASE/Shaders/sets/` (the per-system sets) |
 | `public/shaders/default.glsl` | `skeleton/SYSTEM/desktop/shaders/default.glsl` (final scale pass) |
 
 ```sh
 # re-sync both, always together
 cp ~/projects/NextUI/skeleton/BASE/Shaders/glsl/*.glsl public/shaders/glsl/
-(cd ~/projects/NextUI/skeleton/BASE/Shaders && tar cf - $(find . -name '*.cfg')) \
-  | tar xf - -C public/shaders/presets/
+cp ~/projects/NextUI/skeleton/BASE/Shaders/*.cfg public/shaders/presets/nextui/
+(cd ~/projects/NextUI/skeleton/BASE/Shaders/sets && tar cf - $(find . -name '*.cfg')) \
+  | tar xf - -C public/shaders/presets/sets/
 npm run shaders
 ```
+
+**The cfg tree is split across two folders here**, so do not extract it in one go the way an
+older version of this file did — the root configs belong under `nextui/` and only `sets/`
+keeps its own name. See "Preset layout" below.
 
 ### 2. perfect-retroshaders — `~/projects/perfect-retroshaders` (MIT, the owner's own)
 
@@ -54,9 +60,10 @@ cp ~/projects/perfect-retroshaders/shaders/*.glsl public/shaders/glsl/
 npm run shaders
 ```
 
-**That repo carries no `.cfg`,** so their presets are written here, one per shader, named after it.
-Every shader in that family documents its required pass settings in its own header, and so far all
-of them want the same thing — a NEAREST sampler and rendering at the final output resolution:
+**That repo carries no `.cfg`,** so their presets are written here in
+`public/shaders/presets/perfect-retroshaders/`, one per shader, named after it. Every shader in
+that family documents its required pass settings in its own header, and so far all of them want
+the same thing — a NEAREST sampler and rendering at the final output resolution:
 
 ```ini
 minarch_nrofshaders = 1
@@ -94,6 +101,32 @@ first, since a *NextUI* preset referencing a removed file would be a much worse 
 ours. Saved sessions and shared links can still name a shader that is gone; `render()` reports
 `shader "x" is not loaded` as a warning, so that degrades loudly rather than silently, which is why
 the pass loop keeps that check.
+
+### Preset layout
+
+Every bundled preset lives in a category folder, and the dropdowns group by that folder rather
+than by path depth:
+
+| Folder | What |
+|---|---|
+| `presets/nextui/` | NextUI's own root configs |
+| `presets/other/` | ours, for a shader that is not from either family (`dmg_dot_matrix`) |
+| `presets/perfect-retroshaders/` | ours, one per shader in that family |
+| `presets/sets/` | NextUI's per-system sets, sub-folders and all |
+
+A category is the first path segment; the label is the rest of the path without `.cfg`, so
+`sets/GBA/Retro.cfg` reads as `GBA/Retro` under a `sets` heading. That is what keeps the nine
+presets called "Retro" tellable apart without nine headings. `groupPresets` in
+`core/preset-config.ts` is the single source of both, shared by the cfg panel and the pane
+pickers — they used to group separately and disagreed about labels and order.
+
+**Preset paths are persisted**, in `selectedPreset.id`, in each comparison pane, and inside a
+shared link's payload, so moving a file breaks saved sessions and every link already handed out.
+`resolvePresetPath` maps an old path onto its current home — exact, then by path suffix, then by
+a file name that matches exactly one preset — and it is applied in `loadPreset`, in
+`store.restore()` and on the share-import path. If a preset ever moves again, that is the one
+function to keep honest, and the way to check it is to plant an old path in localStorage and
+reload, not to read the code.
 
 The pipeline semantics come from NextUI's C, not from guesswork:
 

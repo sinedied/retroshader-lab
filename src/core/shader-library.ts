@@ -32,10 +32,37 @@ export const BUNDLED_SAMPLES: SampleEntry[] = manifest.samples ?? [];
 /** Stock NextUI shader presets copied into `public/shaders/presets`. */
 export const BUNDLED_PRESETS: string[] = manifest.presets ?? [];
 
+/**
+ * Maps a preset path onto one that exists today, so a saved session or an already-shared
+ * link keeps working after the presets were sorted into category folders.
+ *
+ * Paths are persisted in three places — `selectedPreset.id`, each comparison pane, and a
+ * link's `stockPreset` — and every one of them may still hold a pre-move path such as
+ * `crt-perfect-v10.cfg`, which now lives under `perfect-retroshaders/`. Resolution is exact
+ * first, then by path suffix, then by a file name that matches exactly one preset. The last
+ * step insists on being unambiguous: nine bundled presets are named `Retro.cfg`, but those
+ * all sit under `sets/` and never moved, so they match exactly and never reach it.
+ *
+ * Returns `undefined` when nothing matches, leaving the caller to report a missing preset
+ * rather than silently loading the wrong one.
+ */
+export function resolvePresetPath(path: string): string | undefined {
+  if (BUNDLED_PRESETS.includes(path)) return path;
+
+  const suffix = BUNDLED_PRESETS.filter((known) => known.endsWith(`/${path}`));
+  if (suffix.length === 1) return suffix[0];
+
+  const file = path.split('/').pop() ?? path;
+  const byName = BUNDLED_PRESETS.filter((known) => known.split('/').pop() === file);
+  return byName.length === 1 ? byName[0] : undefined;
+}
+
 /** Fetches one of the stock NextUI presets. */
 export async function loadPreset(path: string): Promise<string> {
-  const response = await fetch(`${import.meta.env.BASE_URL}shaders/presets/${path}`);
-  if (!response.ok) throw new Error(`Failed to load preset ${path}: ${response.status}`);
+  const resolved = resolvePresetPath(path);
+  if (!resolved) throw new Error(`Unknown preset ${path}`);
+  const response = await fetch(`${import.meta.env.BASE_URL}shaders/presets/${resolved}`);
+  if (!response.ok) throw new Error(`Failed to load preset ${resolved}: ${response.status}`);
   return response.text();
 }
 

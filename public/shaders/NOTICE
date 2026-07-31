@@ -13,8 +13,9 @@ NextUI  (GPL-3.0)
     glsl/         21 shaders copied verbatim from  skeleton/BASE/Shaders/glsl/
     default.glsl  copied verbatim from  skeleton/SYSTEM/desktop/shaders/default.glsl
                   (the final scale pass of the minarch pipeline)
-    presets/      copied verbatim from  skeleton/BASE/Shaders/
-                  (the stock shader configs, including the per-system sets/)
+    presets/nextui/  copied verbatim from  skeleton/BASE/Shaders/*.cfg
+    presets/sets/    copied verbatim from  skeleton/BASE/Shaders/sets/
+                     (the per-system shader configs)
 
 perfect-retroshaders  (MIT)
 ---------------------------
@@ -28,11 +29,13 @@ perfect-retroshaders  (MIT)
     they are now maintained in their own repository under MIT. NextUI no longer
     ships them, so this project tracks them from upstream directly.
 
-    Their presets in presets/ (crt-perfect.cfg, lcd-perfect*.cfg,
-    pixel-perfect.cfg) are written for this project rather than copied, since the
-    upstream repository does not carry minarch configs. Each uses the pass
-    settings its shader's header requires: a NEAREST sampler and rendering at the
-    final output resolution.
+    Their presets in presets/perfect-retroshaders/ are written for this project
+    rather than copied, since the upstream repository does not carry minarch
+    configs. Each uses the pass settings its shader's header requires: a NEAREST
+    sampler and rendering at the final output resolution.
+
+    presets/other/dmg_dot_matrix.cfg is likewise written for this project, for a
+    shader that ships with NextUI.
 
 Shader sources
 --------------

@@ -6,6 +6,7 @@ import type { PassRenderInfo } from '../core/pipeline.js';
 import type { UserPreset } from '../core/user-presets.js';
 import type { SelectedPreset } from '../core/state.js';
 import type { ShaderEntry } from '../core/shader-library.js';
+import { groupPresets, type PresetEntry } from '../core/preset-config.js';
 
 type Tab = 'cfg' | 'passes' | 'shaders' | 'log';
 
@@ -358,21 +359,8 @@ export class RslDock extends LitElement {
 
   /** Stock presets grouped by folder; HTML forbids nested optgroups, so the labels
       carry the hierarchy instead. */
-  private get presetGroups(): [string, string[]][] {
-    const groups = new Map<string, string[]>();
-    for (const path of this.presets) {
-      const parts = path.split('/');
-      const group =
-        parts.length === 1
-          ? 'NextUI stock'
-          : parts.length === 2
-            ? 'NextUI sets'
-            : `NextUI sets · ${parts[1]}`;
-      const list = groups.get(group);
-      if (list) list.push(path);
-      else groups.set(group, [path]);
-    }
-    return [...groups.entries()];
+  private get presetGroups(): [string, PresetEntry[]][] {
+    return groupPresets(this.presets);
   }
 
   /** The selected user preset, when the selection points at one. */
@@ -493,16 +481,16 @@ export class RslDock extends LitElement {
               `
             : nothing}
           ${this.presetGroups.map(
-            ([group, paths]) => html`
+            ([group, entries]) => html`
               <optgroup label=${group}>
-                ${paths.map(
-                  (path) => html`
+                ${entries.map(
+                  (entry) => html`
                     <option
-                      value=${`stock:${path}`}
+                      value=${`stock:${entry.path}`}
                       ?selected=${this.selectedPreset?.kind === 'stock' &&
-                      this.selectedPreset.id === path}
+                      this.selectedPreset.id === entry.path}
                     >
-                      ${path.split('/').pop()?.replace('.cfg', '')}
+                      ${entry.label}
                     </option>
                   `
                 )}

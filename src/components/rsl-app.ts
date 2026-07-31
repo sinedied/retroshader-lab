@@ -15,7 +15,13 @@ import {
   type PassRenderInfo,
   type RenderResult
 } from '../core/pipeline.js';
-import { panePipelineConfig, paneLabel, type UserPresetLookup } from '../core/preset-config.js';
+import {
+  panePipelineConfig,
+  paneLabel,
+  isUserRef,
+  presetLabel,
+  type UserPresetLookup
+} from '../core/preset-config.js';
 import {
   runBenchmark,
   ROUND_PRESETS,
@@ -30,6 +36,7 @@ import {
   BUNDLED_SAMPLES,
   BUNDLED_PRESETS,
   loadPreset,
+  resolvePresetPath,
   readShaderFile,
   fetchShaderSource
 } from '../core/shader-library.js';
@@ -496,13 +503,14 @@ export class RslApp extends LitElement {
   private get exportPresetSlug(): string {
     const selected = this.appState.selectedPreset;
     if (!selected) return '';
-    // a stock preset takes its path, not its label: nine of the bundled presets are named
-    // "Retro" and six "Sharp", one per system folder, so the label alone would have them
-    // all export to the same file. `sets/` is dropped as it carries nothing.
+    // a stock preset takes its path within its category, not just its file name: nine of
+    // the bundled presets are named "Retro" and six "Sharp", one per system folder, so the
+    // name alone would have them all export to the same file. The category itself is
+    // dropped — it says where the preset came from, not which one it is.
     const name =
       selected.kind === 'user'
         ? this.userPresets.get(selected.id)?.name
-        : selected.id.replace(/\.cfg$/, '').replace(/^sets\//, '').replace(/\//g, '-');
+        : presetLabel(selected.id).replace(/\//g, '-');
     // a user preset name is free text, so anything a filesystem dislikes has to go.
     // Accents are folded rather than dropped, or "Ünïcødé" slugs to "n-c-d"; a name with
     // no Latin letters at all yields nothing and the preset is simply left out of the
@@ -852,7 +860,20 @@ export class RslApp extends LitElement {
       if (Object.keys(pipelinePatch).length > 0) store.updatePipeline(pipelinePatch);
 
       const patch: Partial<AppState> = { ...shared.patch };
-      if (shared.stockPreset) patch.selectedPreset = { kind: 'stock', id: shared.stockPreset };
+      // a link made before the presets moved into category folders still names the old
+      // paths, and they would otherwise be written into state and shown as a missing
+      // selection; the fetch above already resolves, so only the stored ids need it
+      if (patch.panes) {
+        patch.panes = patch.panes.map((pane) =>
+          pane.preset && !isUserRef(pane.preset)
+            ? { preset: resolvePresetPath(pane.preset) }
+            : pane
+        ) as [ComparePane, ComparePane];
+      }
+      if (shared.stockPreset) {
+        const resolved = resolvePresetPath(shared.stockPreset);
+        if (resolved) patch.selectedPreset = { kind: 'stock', id: resolved };
+      }
       // the shared state is applied but not saved: see Store.applyShared
       store.applyShared(patch);
       this.appState = store.value;

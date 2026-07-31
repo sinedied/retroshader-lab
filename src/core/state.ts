@@ -2,6 +2,8 @@
 import type { CfgEntry } from './cfg.js';
 import type { PassConfig, PipelineConfig, ScalingMode, FilterName } from './types.js';
 import type { PatternKind } from './test-patterns.js';
+import { resolvePresetPath } from './shader-library.js';
+import { isUserRef } from './preset-config.js';
 
 const STORAGE_KEY = 'retroshader-lab:state';
 
@@ -302,9 +304,31 @@ export class Store {
       }
       if (typeof this.state.exportLabels !== 'boolean') this.state.exportLabels = true;
       this.state.pipeline.passes = (this.state.pipeline.passes ?? []).slice(0, 3);
+      this.migratePresetPaths();
     } catch {
       this.state = defaultState();
     }
+  }
+
+  /**
+   * Rewrites bundled preset paths saved before the presets were sorted into category
+   * folders, so a restored session keeps pointing at the same file.
+   *
+   * The paths are rewritten here rather than merely tolerated at load time: leaving a stale
+   * path in state means it gets written straight back to localStorage, and re-saved
+   * sessions would carry it indefinitely. A path that no longer resolves to anything is
+   * cleared, so the pane falls back to the raw source instead of failing every render.
+   */
+  private migratePresetPaths(): void {
+    const selected = this.state.selectedPreset;
+    if (selected?.kind === 'stock') {
+      const resolved = resolvePresetPath(selected.id);
+      this.state.selectedPreset = resolved ? { ...selected, id: resolved } : undefined;
+    }
+    this.state.panes = this.state.panes.map((pane) => {
+      if (!pane.preset || isUserRef(pane.preset)) return pane;
+      return { preset: resolvePresetPath(pane.preset) };
+    }) as [ComparePane, ComparePane];
   }
 }
 

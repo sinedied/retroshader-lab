@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, query, queryAll, state } from 'lit/decorators.js';
 import { panelStyles } from './shared-styles.js';
-import { paneLabel, paneRef } from '../core/preset-config.js';
+import { paneLabel, paneRef, groupPresets } from '../core/preset-config.js';
 import type { Rect } from '../core/types.js';
 import type { CompareMode, ComparePane } from '../core/state.js';
 
@@ -744,16 +744,19 @@ export class RslViewport extends LitElement {
                 </optgroup>
               `
             : nothing}
-          <optgroup label="NextUI presets">
-            ${this.presets.map(
-              (path) => html`
-                <option value=${path} ?selected=${path === pane?.preset}>
-                  ${path.replace(/\.cfg$/, '')}
-                </option>
-              `
-            )}
-          </optgroup>
-        </select>
+          ${groupPresets(this.presets).map(
+            ([group, entries]) => html`
+              <optgroup label=${group}>
+                ${entries.map(
+                  (entry) => html`
+                    <option value=${entry.path} ?selected=${entry.path === pane?.preset}>
+                      ${entry.label}
+                    </option>
+                  `
+                )}
+              </optgroup>
+            `
+          )}        </select>
       </div>
     `;
   }
