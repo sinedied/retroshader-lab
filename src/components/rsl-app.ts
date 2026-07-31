@@ -112,8 +112,21 @@ export class RslApp extends LitElement {
         align-items: baseline;
         gap: 9px;
         min-width: 0;
+        text-decoration: none;
+        border-radius: 4px;
+        /* the mark sets its own colours; inherit so the link does not recolour it */
+        color: inherit;
       }
 
+      .logo:hover .mark em,
+      .logo:focus-visible .mark em {
+        text-shadow: 0 0 26px rgba(125, 255, 155, 0.95);
+      }
+
+      .logo:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(125, 255, 155, 0.45);
+      }
 
       .logo .mark {
         font-family: var(--font-display);
@@ -1084,9 +1097,15 @@ export class RslApp extends LitElement {
 
     return html`
       <header class="masthead boot" style="animation-delay:0ms">
-        <div class="logo">
+        <a
+          class="logo"
+          href="https://github.com/sinedied/retroshader-lab"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="RetroShader Lab on GitHub"
+        >
           <span class="mark">Retro<em>Shader</em> Lab</span>
-        </div>
+        </a>
         <span class="spacer"></span>
         <div class="seg">
           <button
