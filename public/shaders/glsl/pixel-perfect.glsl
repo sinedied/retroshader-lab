@@ -1,4 +1,4 @@
-// pixel-perfect - uniform pixel blocks with no shimmer, at minimal cost.
+// pixel-perfect v6 - uniform pixel blocks and colour controls, at minimal cost.
 // -----------------------------------------------------------------------------
 // Licence: MIT - Copyright (c) 2026 sinedied
 //
@@ -14,21 +14,26 @@
 // -----------------------------------------------------------------------------
 // PARAMETERS
 //
-//   pp_sharpness  0.20 - 1.00  Transition width between blocks, in output
-//                              pixels. Lower is crisper.
+//   pp_brightness    0.50 - 2.00  Output gain. 1.00 disables it.
+//   pp_contrast      0.00 - 2.00  Contrast. 1.00 disables it.
+//   pp_saturation    0.00 - 2.00  Colour intensity. 1.00 disables it.
+//   pp_gamma         0.50 - 2.00  Output gamma. 1.00 disables it.
+//   pp_temperature  -1.00 - 1.00  Warm above 0, cool below. 0.00 is off.
+//   pp_tint         -1.00 - 1.00  Green above 0, magenta below. 0.00 is off.
 // -----------------------------------------------------------------------------
-// Scales an image so every source pixel becomes an even block, with a single
-// soft pixel wherever a block boundary falls between two output pixels. Integer
-// scale factors come out exact. Nearest-neighbour would instead give blocks of
-// uneven width that crawl as the image scrolls, and a plain bilinear filter
-// would avoid that but blur everything. Each output pixel is the average of the
-// source over its own footprint, which spans at most two texels per axis, so
-// four taps with separable weights evaluate it exactly.
+// A clean upscale: every source pixel becomes an even block, with no shimmer
+// and no blur. The plain, fast default when you want the picture and nothing
+// else, plus simple colour controls for tuning it to a screen.
 //
 // Notes:
 // - Render at the output resolution, 1:1 with the display.
 
-#pragma parameter pp_sharpness "Transition width in px" 1.00 0.20 1.00 0.05
+#pragma parameter pp_brightness  "Brightness"               1.00  0.50 2.00 0.05
+#pragma parameter pp_contrast    "Contrast"                 1.00  0.00 2.00 0.05
+#pragma parameter pp_saturation  "Saturation"               1.00  0.00 2.00 0.05
+#pragma parameter pp_gamma       "Gamma"                    1.00  0.50 2.00 0.05
+#pragma parameter pp_temperature "Cool / warm balance"      0.00 -1.00 1.00 0.01
+#pragma parameter pp_tint        "Magenta / green balance"  0.00 -1.00 1.00 0.01
 
 #if defined(VERTEX)
 
@@ -100,23 +105,35 @@ uniform sampler2D Texture;
 COMPAT_VARYING vec4 TEX0;
 
 #ifdef PARAMETER_UNIFORM
-uniform COMPAT_PRECISION float pp_sharpness;
+uniform COMPAT_PRECISION float pp_brightness;
+uniform COMPAT_PRECISION float pp_contrast;
+uniform COMPAT_PRECISION float pp_saturation;
+uniform COMPAT_PRECISION float pp_gamma;
+uniform COMPAT_PRECISION float pp_temperature;
+uniform COMPAT_PRECISION float pp_tint;
 #else
-#define pp_sharpness 1.0
+#define pp_brightness 1.0
+#define pp_contrast 1.0
+#define pp_saturation 1.0
+#define pp_gamma 1.0
+#define pp_temperature 0.0
+#define pp_tint 0.0
 #endif
+
+// Rec.709 luma, for the saturation mix. Applied to encoded values: the round
+// trip to linear is the construction the scaler exists to avoid.
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
 void main()
 {
-    // Work in source texels: p is this output pixel's centre, h its half-footprint.
-    // The max() matters: a host that does not set the uniform leaves it at 0, and h
-    // is a divisor below, so without it every pixel would come out NaN.
+    // Source texels. The max() guards an unset InputSize, which is 0 and would
+    // make h a zero divisor below.
     vec2 p = TEX0.xy * TextureSize;
-    vec2 h = max(0.4995 * pp_sharpness * InputSize / OutputSize, 1e-6);
+    vec2 h = max(0.4995 * InputSize / OutputSize, 1e-6);
 
-    // B is the texel boundary nearest the footprint. w is the share of the
-    // footprint lying on B's low side, and clamps to exactly 0 or 1 whenever the
-    // footprint sits wholly inside one texel - which is most output pixels, and is
-    // what keeps the blocks flat instead of gradients.
+    // B is the nearest texel boundary; w is the share of the footprint on its
+    // low side. Clamps to 0 or 1 wherever the footprint sits inside one texel,
+    // which is what keeps the blocks flat.
     vec2 B = floor(p + 0.5);
     vec2 w = clamp((B - p + h) / (2.0 * h), 0.0, 1.0);
 
@@ -131,7 +148,48 @@ void main()
 
     // Separable weights. Note mix(x, y, w) returns y at w == 1, so the low-side
     // value has to be the second argument on both axes.
-    FragColor = vec4(mix(mix(d, c, w.x), mix(b, a, w.x), w.y), 1.0);
+    vec3 col = mix(mix(d, c, w.x), mix(b, a, w.x), w.y);
+
+    // The balance goes first, so saturation sees the tinted colour and 0 really
+    // is monochrome. Applied last it would put colour back into an image
+    // saturation had just flattened. It is a separate multiply either way,
+    // since dot(col*t, LUMA) is not t*dot(col, LUMA).
+    //
+    // Brightness, contrast and saturation then fold into one affine map, using
+    // the fact that LUMA sums to 1. Folded, not three steps: that makes it
+    // exactly col*1.0 + 0.0 at the defaults, where the literal chain rounds. Do
+    // not un-fold it. Affine is also what makes grading safe after the blend.
+    //
+    // Tested separately, not summed, or a warm temperature could cancel a cool
+    // tint.
+    if (pp_brightness != 1.0 || pp_contrast != 1.0 || pp_saturation != 1.0
+        || pp_temperature != 0.0 || pp_tint != 0.0) {
+        // Warm/cool trades red against blue, tint trades green against both.
+        // Not luma-normalised, so they shift the level a little too.
+        col *= 1.0 + pp_temperature * vec3(1.0, 0.0, -1.0)
+                   + pp_tint        * vec3(-0.5, 1.0, -0.5);
+
+        float ga = pp_brightness * pp_contrast;
+        float gb = 0.5 - 0.5 * pp_contrast;
+        col = col * (ga * pp_saturation)
+            + (dot(col, LUMA) * (ga * (1.0 - pp_saturation)) + gb);
+
+        // Inside the guard because only a grade can leave 0 to 1: the scaler's
+        // own output is a convex blend of taps already in range. It is also
+        // what makes a balance safe to push negative.
+        col = clamp(col, 0.0, 1.0);
+    }
+
+    // The branch is uniform across the draw, so a gamma of 1 costs nothing. The
+    // base is clamped because pow(0, g) is undefined and returns NaN on real
+    // drivers, and black texels are everywhere; 1e-8 is small enough that pure
+    // black still encodes to 0 even at the lowest gamma, where 1e-5 would lift
+    // it to 1/255.
+    if (abs(pp_gamma - 1.0) > 0.001) {
+        col = pow(max(col, 1e-8), vec3(pp_gamma));
+    }
+
+    FragColor = vec4(col, 1.0);
 }
 
 #endif

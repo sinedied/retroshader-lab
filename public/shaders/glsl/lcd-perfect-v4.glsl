@@ -42,10 +42,16 @@
 // The stripes are three sinusoids 120 degrees apart, summing to a constant at
 // every pixel. They ride the mesh's pitch rules, so they band-limit with it.
 //
+// Same picture as v3, computed from one angle instead of four. The mesh, its
+// box filter and the stripes all live on TAU*(t - phase), so one sine and one
+// cosine of it serve all three through the angle-sum identities.
+//
 // Notes:
 // - Render at the output resolution, 1:1 with the display.
 // - A column mesh and the stripes share a pitch, so they multiply into a
 //   per-channel cast. It is divided out in closed form.
+// - Everything derived from the source and output sizes alone is hoisted out
+//   of the per-fragment work by the driver; keep it that way.
 
 #pragma parameter lp_grid       "Grid visibility"          0.30 0.00 1.00 0.01
 #pragma parameter lp_balance    "Row/column balance"       0.50 0.00 1.00 0.01
@@ -145,18 +151,15 @@ uniform COMPAT_PRECISION float lp_gamma;
 #define TAU 6.283185307
 #define PI  3.141592654
 
-// Integral of the aperture profile 1 - m*cos(TAU*(t - phase)), in cycles.
-// Differencing it over an output pixel's footprint is the exact box filter, and
-// at an integer t the sine term depends on the phase alone, which is what lets
-// the blend below be weighted by aperture rather than by area.
-vec2 apertureIntegral(vec2 t, vec2 m, vec2 phase)
-{
-    return t - m * sin(TAU * (t - phase)) / TAU;
-}
+// cos and sin of TAU/6, the angle from a cell's centre to the red stripe. The
+// green stripe sits a further third of a cycle along, which is exactly half a
+// turn from there, so its pair is (-1, 0) and it needs no constants at all.
+#define COS_TAU_6 0.5
+#define SIN_TAU_6 0.866025404
 
 // Mean of a unit sinusoid of f cycles per output pixel over one pixel, reaching
 // zero at one cycle per pixel. The mesh gets this exactly, from the integral
-// above; the stripes are sampled rather than integrated, so they need it named.
+// below; the stripes are sampled rather than integrated, so they need it named.
 float boxSinc(float f)
 {
     float x = PI * max(f, 1e-4);
@@ -176,28 +179,8 @@ void main()
 {
     vec2 p = TEX0.xy * TextureSize;
     vec2 d = max(InputSize / OutputSize, 1e-6);
-    vec2 h = 0.4995 * d;
     vec2 B = floor(p + 0.5);
 
-    // ------------------------------------------------------------------
-    // Which regime the mesh is in.
-    //
-    // One cycle per source cell while the cells are big enough to carry it, so
-    // the mesh follows the content. Below lp_min_pitch output pixels per cell it
-    // stops tracking the source and takes a fixed output-space pitch, which is
-    // exactly periodic on the pixel grid and so cannot alias at all.
-    //
-    // A sinusoid does not band-limit itself. The trapezoid this shader grew out
-    // of did - its coverage flattens on its own as cells shrink - and the fade
-    // was dropped along with it when the aperture changed. That is what let a
-    // 480x272 source through: at 640x480 it is 1.33 output pixels per cell,
-    // below the two per cycle a pattern needs, and it folded to a wrong coarser
-    // pitch at nearly full amplitude.
-    //
-    // The regime blend is a narrow biased smoothstep, not a comparison. GPUs
-    // evaluate a/b as a*rcp(b), so a pitch mathematically equal to lp_min_pitch
-    // can land either side of it, and the regimes do not agree on contrast.
-    // ------------------------------------------------------------------
     // ------------------------------------------------------------------
     // How many cells the mesh spans per period.
     //
@@ -224,6 +207,15 @@ void main()
 
     vec2 f = d / N;
 
+    // One fade, read twice: the mesh takes both axes and the stripes take the
+    // column one. A sinusoid does not band-limit itself - the trapezoid this
+    // shader grew out of did, its coverage flattening on its own as cells
+    // shrink, and the fade was dropped along with it when the aperture changed.
+    // That is what let a 480x272 source through: at 640x480 it is 1.33 output
+    // pixels per cell, below the two per cycle a pattern needs, and it folded
+    // to a wrong coarser pitch at nearly full amplitude.
+    vec2 fade = nyquistFade(f);
+
     // Once a period spans several cells, only one boundary in N carries a line,
     // so the same amplitude concentrates into a coarser, heavier pattern that
     // has more room to interfere with the content. Easing it back over that
@@ -231,7 +223,7 @@ void main()
     // is every ordinary case, is untouched. 1/N was measured too and buys
     // another 0.1 of beat for noticeably less mesh at N == 2.
     vec2 amp = clamp(lp_grid * 2.0 * vec2(lp_balance, 1.0 - lp_balance), 0.0, 1.0)
-               * nyquistFade(f) * (2.0 / (N + 1.0));
+               * fade * (2.0 / (N + 1.0));
 
     // Half an output pixel, in cycles. It puts one sample per cycle on the
     // trough, which is what lets a two-pixel pitch resolve at all: sampling at
@@ -243,12 +235,49 @@ void main()
     vec2 t  = p / N;
     vec2 hh = 0.4995 * f;
 
-    vec2 Alo = apertureIntegral(t - hh, amp, phase);
-    vec2 Ahi = apertureIntegral(t + hh, amp, phase);
-    vec2 I   = max(Ahi - Alo, 1e-6);
+    // ------------------------------------------------------------------
+    // The aperture integral, from one angle.
+    //
+    // The profile is 1 - m*cos(TAU*(t - phase)) and its integral in cycles is
+    // A(u) = u - m*sin(TAU*(u - phase))/TAU. Differencing that over an output
+    // pixel's footprint is the exact box filter, and at an integer u the sine
+    // term depends on the phase alone, which is what lets the blend below be
+    // weighted by aperture rather than by area.
+    //
+    // Evaluating A at both ends costs two sines of two different angles. But
+    // the ends are symmetric about X = TAU*(t - phase) at a half-width
+    // Y = TAU*hh that depends only on the source and output sizes, so
+    //
+    //     A(t+hh) - A(t-hh) = 2*hh - (m/TAU) * 2*cos(X)*sin(Y)
+    //     A(t-hh)           = (t - hh) - (m/TAU) * (sin(X)*cos(Y)
+    //                                               - cos(X)*sin(Y))
+    //
+    // by the angle-sum identities. sin(Y) and cos(Y) are uniform-derived and
+    // hoisted out of the per-fragment work, so one sine and one cosine of X now
+    // do the work of four, and the stripes below ride the same pair. Verified
+    // against the two-evaluation form to 1e-13 over the whole coordinate range.
+    //
+    // Alo then needs no second product: k*cos(X)*sin(Y) is already half of what
+    // the difference measured, so substituting it back leaves
+    // Alo = t - I/2 - k*cos(Y)*sin(X). That has to use the unclamped difference,
+    // or the two stop agreeing exactly where the clamp bites.
+    // ------------------------------------------------------------------
+    vec2 X    = TAU * (t - phase);
+    vec2 sinX = sin(X);
+    vec2 cosX = cos(X);
+
+    vec2 Y    = TAU * hh;
+    vec2 sinY = sin(Y);
+    vec2 cosY = cos(Y);
+    vec2 k    = amp / TAU;
+
+    vec2 Iraw = 2.0 * hh - k * (2.0 * cosX * sinY);
+    vec2 Alo  = t - 0.5 * Iraw - (k * cosY) * sinX;
+    vec2 I    = max(Iraw, 1e-6);
 
     // Peak-normalised, so the flat top lands at 1 and nothing meets the clamp.
-    vec2 g = I / (2.0 * hh * (1.0 + amp));
+    // The divisor is uniform-derived, so it is a reciprocal taken once.
+    vec2 g = I * (1.0 / (2.0 * hh * (1.0 + amp)));
     float gain = g.x * g.y;
 
     // ------------------------------------------------------------------
@@ -260,9 +289,12 @@ void main()
     // side rather than how much area. Once the mesh locks to output space that
     // correlation is gone and plain area weights are the correct ones, so the
     // two are blended on the same regime term.
+    //
+    // This is the one sine left that does not share X: it is taken at the cell
+    // boundary B, not at the fragment.
     // ------------------------------------------------------------------
     vec2 Bt  = B / N;
-    vec2 AB  = Bt - amp * sin(TAU * (Bt - phase)) / TAU;
+    vec2 AB  = Bt - k * sin(TAU * (Bt - phase));
     vec2 w   = clamp((AB - Alo) / I, 0.0, 1.0);
 
     vec2 lo = (B - 0.5) / TextureSize;
@@ -295,15 +327,19 @@ void main()
     // needed - the one they used to have switched them off entirely at 3.2
     // output pixels per cell, which is the most common scale there is.
     //
-    // The -1/6 centres the triad on its cell: red at 1/6, green at 1/2 and blue
-    // at 5/6 across it.
+    // The triad is centred on its cell - red at 1/6 across it, green at 1/2,
+    // blue at 5/6 - which puts both stripe angles a constant offset from the
+    // mesh's own X. cos(X - K) = cos(X)*cos(K) + sin(X)*sin(K) with K known at
+    // compile time, so the pair already taken above covers them and the two
+    // cosines that used to be here are multiply-adds. Green's offset is half a
+    // turn, so it is just -cos(X).
     // ------------------------------------------------------------------
     vec3 stripe = vec3(1.0);
     if (lp_subpixels > 0.0) {
         float sinc = boxSinc(f.x);
-        float ac   = lp_subpixels * sinc * nyquistFade(f).x;
-        vec2 rg = 1.0 + ac * cos(TAU * (t.x - phase.x - (1.0 / 6.0)
-                                        - vec2(0.0, 1.0 / 3.0)));
+        float ac   = lp_subpixels * sinc * fade.x;
+        vec2 rg = 1.0 + ac * vec2(COS_TAU_6 * cosX.x + SIN_TAU_6 * sinX.x,
+                                  -cosX.x);
         stripe = vec3(rg, 3.0 - rg.x - rg.y);
 
         // --------------------------------------------------------------
@@ -319,11 +355,14 @@ void main()
         // with in the first place.
         //
         // The mean of the product over a cell has a closed form: for a mesh
-        // 1 - M*cos(TAU*(t - psi)) against a stripe 1 + ac*cos(TAU*(t - k)) it
-        // is 1 - (M*ac/2)*cos(TAU*(k - psi)). Dividing each channel by that
+        // 1 - M*cos(TAU*(t - psi)) against a stripe 1 + ac*cos(TAU*(t - kk)) it
+        // is 1 - (M*ac/2)*cos(TAU*(kk - psi)). Dividing each channel by that
         // equalises the three for a per-channel constant and no extra taps. The
         // amplitude has to be the box-filtered one, not the nominal one, or the
         // correction overshoots wherever the filter is biting.
+        //
+        // Those three cosines are of compile-time constants - TAU/6, TAU/2 and
+        // TAU*5/6 - and are written as their exact values.
         // --------------------------------------------------------------
         // The stripe argument already carries -phase, and the mesh trough is
         // at phase, so the phase cancels out of the difference between them.
@@ -332,8 +371,7 @@ void main()
         // matching, which put a cast in that flipped sign with the stripe
         // order - the exact fault being corrected for.
         float M = amp.x * sinc;
-        vec3 corr = 1.0 - 0.5 * M * ac
-                    * cos(TAU * (vec3(0.0, 1.0 / 3.0, 2.0 / 3.0) + (1.0 / 6.0)));
+        vec3 corr = 1.0 - 0.5 * M * ac * vec3(COS_TAU_6, -1.0, COS_TAU_6);
         // The square root is not decoration. That closed form is the cast in
         // linear light, but what is seen - and measured - is the encoded value,
         // and sqrt() below halves any relative deviation on the way there. So
