@@ -488,6 +488,33 @@ export class RslApp extends LitElement {
     ];
   }
 
+  /**
+   * The loaded preset's name, reduced to something safe in a filename. Empty when the
+   * pipeline is the user's own edit rather than a named preset, so the export keeps its
+   * old shape instead of gaining a placeholder.
+   */
+  private get exportPresetSlug(): string {
+    const selected = this.appState.selectedPreset;
+    if (!selected) return '';
+    // a stock preset takes its path, not its label: nine of the bundled presets are named
+    // "Retro" and six "Sharp", one per system folder, so the label alone would have them
+    // all export to the same file. `sets/` is dropped as it carries nothing.
+    const name =
+      selected.kind === 'user'
+        ? this.userPresets.get(selected.id)?.name
+        : selected.id.replace(/\.cfg$/, '').replace(/^sets\//, '').replace(/\//g, '-');
+    // a user preset name is free text, so anything a filesystem dislikes has to go.
+    // Accents are folded rather than dropped, or "Ünïcødé" slugs to "n-c-d"; a name with
+    // no Latin letters at all yields nothing and the preset is simply left out of the
+    // filename, which is the same shape as having no preset loaded.
+    return (name ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, '-')
+      .replace(/^[-.]+|[-.]+$/g, '');
+  }
+
   private rebuildSource(): void {
     const state = this.appState;
     if (state.sampleFile && !BUNDLED_SAMPLES.some((s) => s.file === state.sampleFile)) {
@@ -1272,7 +1299,14 @@ export class RslApp extends LitElement {
           .canBenchmark=${this.main?.canTime ?? true}
           @benchmark-open=${() => this.openBenchmark()}
           @export-png=${(e: CustomEvent<{ composite: boolean }>) => {
-            const name = `retroshader-${state.sourceSystem}-${state.outputWidth}x${state.outputHeight}`;
+            const name = [
+              'retroshader',
+              state.sourceSystem,
+              this.exportPresetSlug,
+              `${state.outputWidth}x${state.outputHeight}`
+            ]
+              .filter(Boolean)
+              .join('-');
             if (e.detail?.composite) void this.viewport.exportComposite(`${name}-compare.png`);
             else this.viewport.exportPng(`${name}.png`);
           }}
