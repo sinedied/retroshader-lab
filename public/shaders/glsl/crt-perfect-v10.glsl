@@ -1,4 +1,4 @@
-// crt-perfect-v9 - scanlines, an RGB mask and curvature, pixel-perfect scale.
+// crt-perfect-v10 - scanlines, an RGB mask and curvature, pixel-perfect scale.
 // -----------------------------------------------------------------------------
 // Author:  sinedied
 // Licence: MIT - Copyright (c) 2026 sinedied
@@ -187,7 +187,6 @@ void main()
     vec2  uv   = vTexCoord;
     vec2  jac  = vec2(1.0);
     float tube = 1.0;
-    float jmax = 1.0;
     float noWarp = 1.0;
 
     if (cp_curvature > 0.0) {
@@ -199,7 +198,6 @@ void main()
         uv  = c * (1.0 + cp_curvature * r2) * norm * 0.5 + 0.5;
         jac = (1.0 + cp_curvature * (vec2(3.0, 1.0) * cc.x
                                    + vec2(1.0, 3.0) * cc.y)) * norm;
-        jmax = (1.0 + 4.0 * cp_curvature) * norm;
         noWarp = 0.0;
 
         // The corners reach past the image, so they have to be masked rather
@@ -239,31 +237,34 @@ void main()
     }
 
     // The patterns are positioned in tube space, so they curve with the glass
-    // the way a real mask and a real beam do. The floor is lifted by jmax so
-    // that even the most magnified corner keeps cp_min_pitch output pixels per
-    // cycle, which is what keeps the band-limiting from ever having to fade.
+    // the way a real mask and a real beam do. Their pitch, however, is the flat
+    // one: see the note below the floor.
     float scanSrcPitch = OutputSize.y / max(InputSize.y, 1.0);
-    float scanPitch    = max(scanSrcPitch, cp_min_pitch * jmax);
+    float scanPitch    = max(scanSrcPitch, cp_min_pitch);
     float scanLocked   = (1.0 - smoothstep(cp_min_pitch * 1.001, cp_min_pitch * 1.02, scanSrcPitch)) * noWarp;
     float scanFreq     = 1.0 / scanPitch;
 
-    // Band-limit on the frame's worst case rather than on this pixel's.
+    // Pitch and band-limit are both computed as though the screen were flat,
+    // and neither takes any account of the curvature.
     //
-    // This looks like a simplification and is a performance fix. boxSinc holds a
-    // sin and nyquistFade a smoothstep, and while their argument depends only on
-    // uniforms the driver hoists them out of the fragment shader and evaluates
-    // them once per draw. Multiplying by the per-fragment jac forfeits that and
-    // costs two sin and two smoothstep per pixel: measured at 16.5 points of a
-    // 19.8-point regression, paid even with curvature switched off.
+    // That is deliberate on two counts. It keeps the pattern locked to the
+    // source - one cycle per source line, one triad per source column - which
+    // is the property that makes scanlines read as scanlines, and scaling the
+    // pitch by the frame's worst magnification quietly broke it: 240 source
+    // lines came out as 201 scanlines at cp_curvature 0.10. And it keeps the
+    // argument a uniform expression, so the driver hoists boxSinc's sin and
+    // nyquistFade's smoothstep out of the fragment shader and runs them once
+    // per draw. Making that argument vary per pixel costs two sin and two
+    // smoothstep per fragment - 16.5 points of frame time, paid even with
+    // curvature off.
     //
-    // jmax depends only on cp_curvature, so this stays a uniform expression and
-    // stays hoisted in both modes. It band-limits as though every pixel sat at
-    // the most magnified corner, which can only ever understate the amplitude,
-    // and the pitch floor above already holds every local frequency at or below
-    // 1/cp_min_pitch - so there was no aliasing margin here to give away. The
-    // cost is that the centre is attenuated as though it were the corner, about
-    // 6% flatter across the frame at cp_curvature 0.10.
-    float scanLocal    = scanFreq * jmax;
+    // The cost is that the magnified corners run finer than the band-limit
+    // assumes, so the pattern is drawn slightly stronger there than its true
+    // box average. It stays above two output pixels per cycle at every setting
+    // in range, so it is over-contrast and not aliasing, and curvature is a
+    // distortion by construction - artifacts it creates in the region it is
+    // distorting are the effect, not a defect in the pattern.
+    float scanLocal    = scanFreq;
 
     float scanAmp = cp_scanlines * mix(nyquistFade(scanLocal), 1.0, scanLocked);
     float scanAC  = 0.5 * scanAmp * mix(boxSinc(scanLocal), 1.0, scanLocked);
@@ -275,10 +276,10 @@ void main()
     }
 
     float maskSrcPitch = OutputSize.x / max(InputSize.x * cp_mask_size, 1.0);
-    float maskPitch    = max(maskSrcPitch, cp_min_pitch * jmax);
+    float maskPitch    = max(maskSrcPitch, cp_min_pitch);
     float maskLocked   = (1.0 - smoothstep(cp_min_pitch * 1.001, cp_min_pitch * 1.02, maskSrcPitch)) * noWarp;
     float maskFreq     = 1.0 / maskPitch;
-    float maskLocal    = maskFreq * jmax;   // uniform, as above
+    float maskLocal    = maskFreq;
 
     float maskAmp = cp_rgb_mask * mix(nyquistFade(maskLocal), 1.0, maskLocked);
 

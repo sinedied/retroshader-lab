@@ -22,12 +22,14 @@ perfect-retroshaders  (MIT)
     https://github.com/sinedied/perfect-retroshaders
     Copyright (c) 2026 sinedied, MIT — the full text is in each file's header.
 
-    glsl/   crt-perfect.glsl, lcd-perfect.glsl, lcd-perfect-v2a.glsl,
-            lcd-perfect-v2b.glsl, lcd-perfect-v3.glsl, pixel-perfect.glsl
+    glsl/   the crt-perfect, dmg-perfect, lcd-perfect and pixel-perfect families
+            — 24 files, matching glsl/*perfect*.glsl
 
-    These were previously carried by NextUI and released into the public domain;
-    they are now maintained in their own repository under MIT. NextUI no longer
-    ships them, so this project tracks them from upstream directly.
+    crt-perfect, lcd-perfect and pixel-perfect were previously carried by NextUI
+    and released into the public domain; they are now maintained in their own
+    repository under MIT, and NextUI no longer ships them, so this project tracks
+    them from upstream directly. The dmg-perfect family, and the numbered
+    revisions of the other three, have only ever existed there.
 
     Their presets in presets/perfect-retroshaders/ are written for this project
     rather than copied, since the upstream repository does not carry minarch
