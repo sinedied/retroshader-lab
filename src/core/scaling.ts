@@ -94,6 +94,7 @@ export const OUTPUT_PRESETS: Resolution[] = [
   { label: '1280 × 960 (RP Nova)', width: 1280, height: 960 },
   { label: '1280 × 720 (TrimUI Smart Pro)', width: 1280, height: 720 },
   { label: '1024 × 768 (default, TrimUI Brick)', width: 1024, height: 768 },
+  { label: '720 × 480 (RG34xx)', width: 720, height: 480 },
   { label: '640 × 480 (RGxx)', width: 640, height: 480 }
 ];
 
