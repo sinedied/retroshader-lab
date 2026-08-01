@@ -18,6 +18,9 @@
 
 **[👉 Open the lab](https://sinedied.github.io/retroshader-lab/)**
 
+> [!TIP]
+> Looking for the "perfect" retroshaders? Look here: [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders) and try them in the lab!.
+
 ## Overview
 
 Tuning shaders on a handheld is slow: edit a `.cfg`, copy it to the SD card, boot a game, squint, repeat. RetroShader Lab runs **the same pipeline in the browser** so you can iterate in milliseconds, then save a `.cfg` that drops straight onto the device.
