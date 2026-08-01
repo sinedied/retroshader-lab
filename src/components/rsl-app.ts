@@ -67,6 +67,49 @@ import type {
   SourceImage
 } from '../core/types.js';
 
+/**
+ * State the render output does not depend on.
+ *
+ * Pan, zoom and the comparison frame are applied to the canvas in CSS — the pipeline always
+ * renders at the output resolution — so dragging to pan used to redraw every pane, at that
+ * resolution, for a pixel-identical result. A 30-step pan drag cost 30 full renders.
+ *
+ * Listing what is *safe to skip* rather than what needs a render is deliberate: a field
+ * added later is not in this set, so it renders, and the cost of forgetting one is a wasted
+ * frame rather than a stale image.
+ */
+const VIEW_ONLY_KEYS = new Set<keyof AppState>([
+  'pan',
+  'zoom',
+  'viewMode',
+  'dividers',
+  'compareWidth',
+  'compareHeight',
+  'exportLabels',
+  'collapsed',
+  'showRail',
+  'showDock',
+  'showInspector',
+  'selectedPreset',
+  'cfgExtras',
+  'uploadedName'
+]);
+
+/**
+ * Whether anything that reaches the shaders changed.
+ *
+ * `compareMode` and `paneCount` look like view state but are not: they decide how many panes
+ * `paneConfigsForRender()` returns, so they have to trigger a render.
+ */
+function affectsRender(before: AppState, after: AppState): boolean {
+  if (before === after) return false;
+  for (const key of Object.keys(after) as (keyof AppState)[]) {
+    if (before[key] === after[key] || VIEW_ONLY_KEYS.has(key)) continue;
+    return true;
+  }
+  return false;
+}
+
 @customElement('rsl-app')
 export class RslApp extends LitElement {
   static override styles = [
@@ -360,8 +403,9 @@ export class RslApp extends LitElement {
     store.restore();
     this.appState = store.value;
     this.unsubscribe = store.subscribe((state) => {
+      const previous = this.appState;
       this.appState = state;
-      this.scheduleRender();
+      if (affectsRender(previous, state)) this.scheduleRender();
     });
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('hashchange', this.onHashChange);
