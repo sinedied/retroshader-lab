@@ -410,7 +410,8 @@ export class RslPipelinePanel extends LitElement {
           <h2>Pipeline</h2>
           <span class="spacer"></span>
           <span class="chip">
-            minarch_nrofshaders <b>${this.passes.length === 0 ? 'off' : this.passes.length}</b>
+            <span class="clip">minarch_nrofshaders</span>
+            <b>${this.passes.length === 0 ? 'off' : this.passes.length}</b>
           </span>
         </div>
         <div class="module-body" ?hidden=${this.collapsed['pipeline']}>

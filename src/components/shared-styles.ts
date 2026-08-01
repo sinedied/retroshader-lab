@@ -114,6 +114,11 @@ export const panelStyles = css`
   input[type='text'],
   input[type='number'] {
     width: 100%;
+    /* theme.css sets this with a universal selector, but a document stylesheet cannot reach
+       into a shadow root, so inside the panels the UA defaults applied instead — border-box
+       for select and content-box for input. That made every full-width input overflow its
+       cell by its own padding and border. */
+    box-sizing: border-box;
     appearance: none;
     background: var(--void-2);
     color: var(--ink);
@@ -321,11 +326,24 @@ export const panelStyles = css`
     border-radius: 2px;
     padding: 2px 6px;
     font-variant-numeric: tabular-nums;
+    /* a flex item will not shrink past its min-content width while min-width is auto, and a
+       chip label like minarch_nrofshaders is one unbreakable word — so it pushed out of
+       the header instead of giving way */
+    min-width: 0;
+  }
+
+  /* the value is the information in a chip, so it is the label that truncates */
+  .chip .clip {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .chip b {
     color: var(--phosphor);
     font-weight: 500;
+    /* never the part that gets clipped */
+    flex: none;
   }
 
   .chip.warn {
