@@ -168,6 +168,27 @@ export class Store {
   }
 
   /**
+   * Clears the in-memory state back to a fresh lab, so a shared link can be rebuilt on top
+   * of it. **Nothing is written**: the caller must already hold saving, and this asserts it.
+   *
+   * A link carries only what the sender changed from the defaults, which is what keeps it
+   * short and lets a field added later fall back to its default. Applying that delta on top
+   * of the recipient's own state therefore produced a hybrid — every setting the sender had
+   * left alone kept the recipient's value. Rebuilding from the defaults is what makes the
+   * delta mean what it says.
+   *
+   * The recipient's stored session is untouched by this: it is only overwritten if they go
+   * on to change something, at which point the shared setup has become theirs.
+   */
+  resetForShared(): void {
+    if (!this.holdSave) {
+      throw new Error('resetForShared() requires holdSaving() first, or it would persist');
+    }
+    this.state = defaultState();
+    this.emit();
+  }
+
+  /**
    * Applies state from a shared link **without persisting it**.
    *
    * Opening someone else's link to look at it must not overwrite the session you already
@@ -178,6 +199,10 @@ export class Store {
   applyShared(patch: Partial<AppState>): void {
     this.holdSaving();
     this.state = { ...this.state, ...patch };
+    // a link with three panes but no divider list would otherwise keep the two-pane default
+    if (this.state.dividers.length !== this.state.paneCount - 1) {
+      this.state.dividers = Store.dividersFor(this.state.paneCount);
+    }
     for (const listener of this.listeners) listener(this.state);
   }
 

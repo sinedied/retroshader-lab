@@ -841,6 +841,10 @@ export class RslApp extends LitElement {
       // before any import: onCfgImport goes through the ordinary update path, which would
       // otherwise persist over the recipient's own session
       store.holdSaving();
+      // and before that import too: a link carries only what the sender changed from the
+      // defaults, so it has to land on the defaults rather than on the recipient's own
+      // settings. This is in-memory only — holdSaving above keeps it out of localStorage.
+      store.resetForShared();
       const renames = new Map<string, string>();
 
       // presets a pane points at are held for the session only: rendering someone's
