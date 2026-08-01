@@ -1,6 +1,8 @@
 node_modules/
 dist/
 src/generated/
+# written by `npm run shaders` from the vendored Gambatte table, like the manifest
+public/palettes/
 *.local
 .DS_Store
 .vite/

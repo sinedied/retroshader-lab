@@ -74,6 +74,8 @@ interface SharePayload {
   ss?: string;
   sp?: string;
   sf?: string | null;
+  /** Gambatte palette applied to a Game Boy screenshot. */
+  gp?: string;
   /** Output size. */
   ow?: number;
   oh?: number;
@@ -235,6 +237,7 @@ function buildPayload(input: ShareInput): SharePayload {
   if (state.sourceSystem !== base.sourceSystem) payload.ss = state.sourceSystem;
   if (state.sourcePattern !== base.sourcePattern) payload.sp = state.sourcePattern;
   if (state.sampleFile !== base.sampleFile) payload.sf = state.sampleFile ?? null;
+  if (state.gbPalette !== base.gbPalette) payload.gp = state.gbPalette;
   if (state.outputWidth !== base.outputWidth) payload.ow = state.outputWidth;
   if (state.outputHeight !== base.outputHeight) payload.oh = state.outputHeight;
 
@@ -391,6 +394,7 @@ export async function decodeShare(encoded: string): Promise<DecodedShare> {
   if (payload.ss !== undefined) patch.sourceSystem = payload.ss;
   if (payload.sp !== undefined) patch.sourcePattern = payload.sp as AppState['sourcePattern'];
   if (payload.sf !== undefined) patch.sampleFile = payload.sf ?? undefined;
+  if (typeof payload.gp === 'string') patch.gbPalette = payload.gp;
   if (payload.ow !== undefined) patch.outputWidth = payload.ow;
   if (payload.oh !== undefined) patch.outputHeight = payload.oh;
 

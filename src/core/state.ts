@@ -3,6 +3,7 @@ import type { CfgEntry } from './cfg.js';
 import type { PassConfig, PipelineConfig, ScalingMode, FilterName } from './types.js';
 import type { PatternKind } from './test-patterns.js';
 import { resolvePresetPath } from './shader-library.js';
+import { DEFAULT_GB_PALETTE } from './gb-palettes.js';
 import { isUserRef } from './preset-config.js';
 
 const STORAGE_KEY = 'retroshader-lab:state';
@@ -35,6 +36,8 @@ export interface AppState {
   sampleFile: string | undefined;
   /** Set when the user uploaded an image; the file itself is not persisted. */
   uploadedName: string | undefined;
+  /** Gambatte palette applied to the Game Boy screenshots, which ship as greyscale masters. */
+  gbPalette: string;
 
   outputWidth: number;
   outputHeight: number;
@@ -93,6 +96,9 @@ export function defaultState(): AppState {
     sourcePattern: 'grid',
     sampleFile: PREFERRED_SAMPLE,
     uploadedName: undefined,
+    // the shade the bundled screenshots were already recoloured to, so the default look is
+    // exactly what it was before palettes could be chosen
+    gbPalette: DEFAULT_GB_PALETTE,
     outputWidth: 1024,
     outputHeight: 768,
     pipeline: {

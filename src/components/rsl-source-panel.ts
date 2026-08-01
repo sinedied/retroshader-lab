@@ -8,6 +8,7 @@ import {
   type SystemResolution
 } from '../core/test-patterns.js';
 import { OUTPUT_PRESETS, CORE_ASPECTS } from '../core/scaling.js';
+import type { GbPaletteGroup } from '../core/gb-palettes.js';
 import { SCALING_MODES, FILTERS } from '../core/types.js';
 import type { FilterName, ScalingMode, SourceImage } from '../core/types.js';
 import type { SampleEntry } from '../core/shader-library.js';
@@ -84,6 +85,14 @@ export class RslSourcePanel extends LitElement {
         grid-template-columns: 1fr 1fr;
         gap: 8px;
       }
+
+      /* the group label is short, the palette names are long, so give them the room */
+      .palette {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+        gap: 8px;
+        margin-top: 8px;
+      }
     `
   ];
 
@@ -99,6 +108,10 @@ export class RslSourcePanel extends LitElement {
   @property({ type: String }) scaleFilter: FilterName = 'NEAREST';
   @property({ type: Number }) coreAspect = 4 / 3;
   @property({ attribute: false }) collapsed: Record<string, boolean> = {};
+  @property({ type: String }) gbPalette = '';
+  @property({ attribute: false }) paletteGroups: GbPaletteGroup[] = [];
+  /** Whether the selected screenshot is a Game Boy one, the only kind that recolours. */
+  @property({ type: Boolean }) isGbSample = false;
 
   @state() private dragOver = false;
 
@@ -150,6 +163,63 @@ export class RslSourcePanel extends LitElement {
       if (file) this.emit('source-file', file);
     });
     input.click();
+  }
+
+  /**
+   * Palette controls, shown only for a Game Boy screenshot.
+   *
+   * Two selects rather than one: the table holds 581 palettes, and TWB64 alone is 300, so a
+   * single list would be unusable. The group is derived from the selected palette rather
+   * than held separately, so the pair cannot drift out of step with the saved state.
+   */
+  private renderPalettePicker() {
+    if (!this.isGbSample || this.paletteGroups.length === 0) return nothing;
+    const group =
+      this.paletteGroups.find((g) => g.palettes.some((p) => p.name === this.gbPalette)) ??
+      this.paletteGroups[0];
+
+    return html`
+      <div class="palette">
+        <div>
+          <label for="pal-group">Group</label>
+          <select
+            id="pal-group"
+            name="palette-group"
+            @change=${(e: Event) => {
+              const next = this.paletteGroups.find(
+                (g) => g.group === (e.target as HTMLSelectElement).value
+              );
+              // moving group picks its first palette, so the selection is always valid
+              if (next?.palettes[0]) this.emit('gb-palette', next.palettes[0].name);
+            }}
+          >
+            ${this.paletteGroups.map(
+              (entry) => html`
+                <option value=${entry.group} ?selected=${entry.group === group.group}>
+                  ${entry.group} · ${entry.palettes.length}
+                </option>
+              `
+            )}
+          </select>
+        </div>
+        <div>
+          <label for="pal">Palette</label>
+          <select
+            id="pal"
+            name="palette"
+            @change=${(e: Event) => this.emit('gb-palette', (e.target as HTMLSelectElement).value)}
+          >
+            ${group.palettes.map(
+              (palette) => html`
+                <option value=${palette.name} ?selected=${palette.name === this.gbPalette}>
+                  ${palette.name}
+                </option>
+              `
+            )}
+          </select>
+        </div>
+      </div>
+    `;
   }
 
   private renderThumb() {
@@ -217,6 +287,7 @@ export class RslSourcePanel extends LitElement {
                 </div>
               `
             : nothing}
+          ${this.renderPalettePicker()}
 
           <div class="preview">
             <div class="thumb">${this.renderThumb()}</div>

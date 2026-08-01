@@ -22,7 +22,7 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { deflateSync, inflateSync, crc32 } from 'node:zlib';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -41,13 +41,33 @@ const quantize = (rgb24) => {
   return [r, g, b];
 };
 
-/** Parses the vendored header into `display name -> four background colours`. */
-export function loadPalettes() {
+/** Reads the header. It is valid UTF-8 throughout, including its one accented author name. */
+function readHeader() {
   if (!existsSync(HEADER)) {
     throw new Error(`Missing ${HEADER} — see scripts/vendor/NOTICE`);
   }
-  const source = readFileSync(HEADER, 'utf8');
+  return readFileSync(HEADER, 'utf8');
+}
 
+/**
+ * Undoes double-encoded UTF-8 in a palette title.
+ *
+ * One entry upstream reads `BALLÃ´Ã´N KID`, which is `BALLÔÔN KID` that has been through
+ * UTF-8 encoding twice. Reinterpreting the characters as the bytes they came from and
+ * decoding once more recovers it, and leaves anything already correct untouched.
+ */
+function repairMojibake(title) {
+  if (!/[\u00c2-\u00c3][\u0080-\u00bf]/.test(title)) return title;
+  try {
+    const repaired = Buffer.from(title, 'latin1').toString('utf8');
+    return repaired.includes('\uFFFD') ? title : repaired;
+  } catch {
+    return title;
+  }
+}
+
+/** `symbol -> four background colours`, from the PACK15_4 arrays. */
+function parseColours(source) {
   // static const unsigned short <symbol>[] = { PACK15_4(0x.., 0x.., 0x.., 0x..), ... };
   // Some entries carry a trailing `// comment` between the brace and the first row.
   const colours = new Map();
@@ -59,6 +79,13 @@ export function loadPalettes() {
       colours.set(symbol, values.map(quantize));
     }
   }
+  return colours;
+}
+
+/** Parses the vendored header into `display name -> four background colours`. */
+export function loadPalettes() {
+  const source = readHeader();
+  const colours = parseColours(source);
 
   // { "Display name", symbol },
   const palettes = new Map();
@@ -70,6 +97,70 @@ export function loadPalettes() {
 
   if (palettes.size === 0) throw new Error('No palettes parsed — has the header format changed?');
   return palettes;
+}
+
+/** The three `GbcPaletteEntry` tables, which is where the grouping comes from. */
+const TABLES = [
+  { array: 'gbcDirPalettes', group: undefined },
+  { array: 'gbcTitlePalettes', group: 'Per-game GBC' },
+  { array: 'sgbTitlePalettes', group: 'Per-game SGB' }
+];
+
+/**
+ * Which group a directly-selectable palette belongs to.
+ *
+ * TWB64 is 300 entries on its own, so it is split into four packs of 75. The pack comes
+ * from the number in the title rather than the entry's position, so an upstream refresh
+ * that inserts or reorders palettes cannot quietly move one into the wrong pack.
+ */
+function directGroup(title) {
+  const twb64 = /^TWB64\s+(\d+)/.exec(title);
+  if (twb64) {
+    const n = Number(twb64[1]);
+    if (n < 1 || n > 300) {
+      throw new Error(`${title}: TWB64 numbering has grown past 300, the packs need revisiting`);
+    }
+    return `TWB64 Pack ${Math.ceil(n / 75)}`;
+  }
+  for (const prefix of ['PixelShift', 'Special', 'GBC', 'SGB', 'GB']) {
+    if (title.startsWith(prefix)) return prefix;
+  }
+  return 'Other';
+}
+
+/**
+ * Every palette with the group it belongs to, in header order.
+ *
+ * Titles repeat across the two per-game tables, so the same name can appear twice with
+ * different colours; each entry therefore carries its own id rather than being keyed by
+ * name the way `loadPalettes` is.
+ */
+export function loadPaletteGroups() {
+  const source = readHeader();
+  const colours = parseColours(source);
+  const entries = [];
+  const seen = new Set();
+
+  for (const { array, group } of TABLES) {
+    const table = new RegExp(
+      `static\\s+const\\s+GbcPaletteEntry\\s+${array}\\s*\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};`
+    ).exec(source);
+    if (!table) throw new Error(`Table ${array} not found — has the header format changed?`);
+
+    for (const [, rawTitle, symbol] of table[1].matchAll(/\{\s*"([^"]+)"\s*,\s*(\w+)\s*\}/g)) {
+      const rgb = colours.get(symbol);
+      if (!rgb) continue;
+      const title = repairMojibake(rawTitle);
+      const name = group ?? directGroup(title);
+      const id = `${name}/${title}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      entries.push({ id, group: name, name: title, colours: rgb });
+    }
+  }
+
+  if (entries.length === 0) throw new Error('No palettes parsed — has the header format changed?');
+  return entries;
 }
 
 const hex = ([r, g, b]) =>
@@ -268,7 +359,11 @@ async function main() {
   console.log(`  palette: ${name}`);
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exitCode = 1;
-});
+// Only run the CLI when invoked directly: the manifest generator imports `loadPalettes`
+// from here, and an unguarded `main()` would print the usage banner into every build.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}

@@ -42,6 +42,12 @@ import {
 } from '../core/shader-library.js';
 import { computeDstRect } from '../core/scaling.js';
 import {
+  loadGbPalettes,
+  findGbPalette,
+  recolouredSource,
+  type GbPaletteGroup
+} from '../core/gb-palettes.js';
+import {
   encodeShareUrl,
   decodeShare,
   readShareFragment,
@@ -369,6 +375,8 @@ export class RslApp extends LitElement {
   /** Messages from user actions (import, preset, upload); render warnings are separate
       because every render replaces them. */
   @state() private notices: string[] = [];
+  /** Palette table, once fetched; only Game Boy screenshots need it. */
+  @state() private paletteGroups: GbPaletteGroup[] = [];
   @state() private shaderNotice: { ok: boolean; text: string } | undefined = undefined;
   @state() private shareResult:
     | { ok: boolean; text: string; url?: string; notes: string[]; showUrl: boolean }
@@ -569,6 +577,14 @@ export class RslApp extends LitElement {
       .replace(/^[-.]+|[-.]+$/g, '');
   }
 
+  /** Whether the selected sample is a Game Boy screenshot, the only kind that recolours. */
+  private get gbSampleFile(): string | undefined {
+    const file = this.appState.sampleFile;
+    if (!file) return undefined;
+    const meta = BUNDLED_SAMPLES.find((sample) => sample.file === file);
+    return meta?.system === 'gb' ? file : undefined;
+  }
+
   private rebuildSource(): void {
     const state = this.appState;
     if (state.sampleFile && !BUNDLED_SAMPLES.some((s) => s.file === state.sampleFile)) {
@@ -577,10 +593,18 @@ export class RslApp extends LitElement {
       return;
     }
     if (state.sampleFile) {
-      const url = `${import.meta.env.BASE_URL}samples/${state.sampleFile}`;
+      // Game Boy screenshots load from their greyscale master and are recoloured here, so
+      // the palette is a live choice rather than something baked into the bundled file.
+      const gb = this.gbSampleFile;
+      const url = gb
+        ? `${import.meta.env.BASE_URL}samples/originals/${gb}`
+        : `${import.meta.env.BASE_URL}samples/${state.sampleFile}`;
+      const wanted = state.sampleFile;
       void loadImageSource(url, state.sampleFile)
-        .then((source) => {
-          this.source = source;
+        .then(async (source) => {
+          // the user may have moved on while the image and the palette table were loading
+          if (store.value.sampleFile !== wanted) return;
+          this.source = gb ? await this.recolour(source) : source;
           this.scheduleRender();
         })
         .catch((error: Error) => {
@@ -592,6 +616,28 @@ export class RslApp extends LitElement {
       SYSTEM_RESOLUTIONS.find((s) => s.id === state.sourceSystem) ?? SYSTEM_RESOLUTIONS[0];
     this.source = makeGeneratedSource(system, state.sourcePattern);
     this.scheduleRender();
+  }
+
+  /**
+   * Applies the selected palette, falling back to the greyscale master if the table or the
+   * palette cannot be found — a missing palette should look like a plain screenshot, not
+   * like a broken source.
+   */
+  private async recolour(source: SourceImage): Promise<SourceImage> {
+    const name = this.appState.gbPalette;
+    try {
+      const groups = await loadGbPalettes();
+      this.paletteGroups = groups;
+      const palette = findGbPalette(groups, name);
+      if (!palette) {
+        this.notices = [`Unknown Game Boy palette "${name}", showing the greyscale capture.`];
+        return source;
+      }
+      return recolouredSource(source, source.bitmap, palette);
+    } catch (error) {
+      this.notices = [`Could not load the palette table: ${(error as Error).message}`];
+      return source;
+    }
   }
 
   private scheduleRender(): void {
@@ -1229,6 +1275,13 @@ export class RslApp extends LitElement {
             .pattern=${state.sourcePattern}
             .sampleFile=${state.sampleFile}
             .samples=${BUNDLED_SAMPLES}
+            .gbPalette=${state.gbPalette}
+            .paletteGroups=${this.paletteGroups}
+            .isGbSample=${this.gbSampleFile !== undefined}
+            @gb-palette=${(e: CustomEvent<string>) => {
+              store.update({ gbPalette: e.detail });
+              this.rebuildSource();
+            }}
             .uploadedName=${state.uploadedName}
             .outputWidth=${state.outputWidth}
             .outputHeight=${state.outputHeight}
