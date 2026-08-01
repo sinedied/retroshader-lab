@@ -172,22 +172,11 @@ export class RslApp extends LitElement {
         border-radius: 50%;
         background: var(--phosphor);
         box-shadow: 0 0 10px var(--phosphor);
-        animation: pulse 2.6s ease-in-out infinite;
       }
 
       .led.error::before {
         background: var(--danger);
         box-shadow: 0 0 10px var(--danger);
-      }
-
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.35;
-        }
       }
 
       main {
