@@ -86,11 +86,46 @@ export class RslSourcePanel extends LitElement {
         gap: 8px;
       }
 
-      /* the two scroll sliders sit under the pattern picker, spanning its column */
+      /* motion applies to the whole source, so it sits under the preview rather than in the
+         pattern column; off, it is one row and nothing more */
       .scroll {
         display: grid;
         gap: 6px;
-        margin-top: 8px;
+        margin-top: 10px;
+      }
+
+      .scroll-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* .label is display:block, so it needs an override to share a row */
+      .scroll-head .label {
+        display: inline;
+        margin: 0;
+      }
+
+      .scroll-head .toggle {
+        margin-left: auto;
+        min-width: 84px;
+      }
+
+      /* label left, slider right, so enabling motion costs one row per control */
+      .scroll-row {
+        display: grid;
+        grid-template-columns: 88px 1fr;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .scroll-row label {
+        margin: 0;
+        white-space: nowrap;
+      }
+
+      .scroll-row input[type='range'] {
+        width: 100%;
       }
 
       .scroll label b {
@@ -121,6 +156,7 @@ export class RslSourcePanel extends LitElement {
   @property({ type: Number }) coreAspect = 4 / 3;
   @property({ attribute: false }) collapsed: Record<string, boolean> = {};
   @property({ type: String }) gbPalette = '';
+  @property({ type: Boolean }) scrollEnabled = false;
   @property({ type: Number }) scrollAngle = 0;
   @property({ type: Number }) scrollSpeed = 1;
   @property({ attribute: false }) paletteGroups: GbPaletteGroup[] = [];
@@ -237,52 +273,71 @@ export class RslSourcePanel extends LitElement {
   }
 
   /**
-   * Direction and speed for the scrolling pattern, shown only when it is selected.
+   * Motion controls, which apply to whatever the source happens to be.
    *
-   * Speed is in source pixels per frame because that is how a game scrolls: below 1 the field
-   * moves a whole pixel every few frames, which is the crawl that makes beating obvious.
+   * Off, this is a single row: motion is the only thing in the app that renders continuously,
+   * so it is off by default and must not charge the panel vertical space for being off.
+   *
+   * Speed is in source pixels per emulated frame because that is how a game scrolls: below 1
+   * the image moves a whole pixel every few frames, which is the crawl that makes beating
+   * obvious.
    */
   private renderScrollControls() {
-    if (this.pattern !== 'scroll') return nothing;
     const arrow = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'][
       Math.round(((this.scrollAngle % 360) + 360) % 360 / 45) % 8
     ];
     return html`
       <div class="scroll">
-        <div>
-          <label for="scroll-dir">Direction <b>${arrow} ${this.scrollAngle}°</b></label>
-          <input
-            id="scroll-dir"
-            name="scroll-angle"
-            type="range"
-            min="0"
-            max="315"
-            step="45"
-            .value=${String(this.scrollAngle)}
-            @input=${(e: Event) =>
-              this.emit('scroll-change', {
-                scrollAngle: Number((e.target as HTMLInputElement).value)
-              })}
-          />
+        <div class="scroll-head">
+          <label class="label" for="scroll-on">Motion</label>
+          <button
+            id="scroll-on"
+            class="toggle"
+            type="button"
+            aria-pressed=${this.scrollEnabled ? 'true' : 'false'}
+            @click=${() => this.emit('scroll-change', { scrollEnabled: !this.scrollEnabled })}
+          >
+            ${this.scrollEnabled ? 'Scrolling' : 'Still'}
+          </button>
         </div>
-        <div>
-          <label for="scroll-speed">
-            Speed <b>${this.scrollSpeed === 0 ? 'still' : `${this.scrollSpeed} px/frame`}</b>
-          </label>
-          <input
-            id="scroll-speed"
-            name="scroll-speed"
-            type="range"
-            min="0"
-            max="8"
-            step="0.25"
-            .value=${String(this.scrollSpeed)}
-            @input=${(e: Event) =>
-              this.emit('scroll-change', {
-                scrollSpeed: Number((e.target as HTMLInputElement).value)
-              })}
-          />
-        </div>
+        ${this.scrollEnabled
+          ? html`
+              <div class="scroll-row">
+                <label for="scroll-dir">Dir. <b>${arrow} ${this.scrollAngle}°</b></label>
+                <input
+                  id="scroll-dir"
+                  name="scroll-angle"
+                  type="range"
+                  min="0"
+                  max="315"
+                  step="45"
+                  .value=${String(this.scrollAngle)}
+                  @input=${(e: Event) =>
+                    this.emit('scroll-change', {
+                      scrollAngle: Number((e.target as HTMLInputElement).value)
+                    })}
+                />
+              </div>
+              <div class="scroll-row">
+                <label for="scroll-speed">
+                  Speed <b>${this.scrollSpeed === 0 ? 'still' : `${this.scrollSpeed} px/f`}</b>
+                </label>
+                <input
+                  id="scroll-speed"
+                  name="scroll-speed"
+                  type="range"
+                  min="0"
+                  max="8"
+                  step="0.25"
+                  .value=${String(this.scrollSpeed)}
+                  @input=${(e: Event) =>
+                    this.emit('scroll-change', {
+                      scrollSpeed: Number((e.target as HTMLInputElement).value)
+                    })}
+                />
+              </div>
+            `
+          : nothing}
       </div>
     `;
   }
@@ -391,9 +446,10 @@ export class RslSourcePanel extends LitElement {
                   )}
                 </select>
               </div>
-              ${this.renderScrollControls()}
             </div>
           </div>
+
+          ${this.renderScrollControls()}
 
           <div
             class="drop ${this.dragOver ? 'over' : ''}"

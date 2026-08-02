@@ -38,9 +38,14 @@ export interface AppState {
   uploadedName: string | undefined;
   /** Gambatte palette applied to the Game Boy screenshots, which ship as greyscale masters. */
   gbPalette: string;
-  /** Scroll direction of the motion pattern, in degrees: 0 moves right, 90 moves down. */
+  /**
+   * Whether the source scrolls. Off by default: it is the only thing here that renders
+   * continuously, so it costs GPU for as long as it is on.
+   */
+  scrollEnabled: boolean;
+  /** Scroll direction, in degrees: 0 moves right, 90 moves down. */
   scrollAngle: number;
-  /** Scroll speed of the motion pattern, in source pixels per frame. 0 holds it still. */
+  /** Scroll speed, in source pixels per emulated frame. 0 holds it still. */
   scrollSpeed: number;
 
   outputWidth: number;
@@ -103,6 +108,7 @@ export function defaultState(): AppState {
     // the shade the bundled screenshots were already recoloured to, so the default look is
     // exactly what it was before palettes could be chosen
     gbPalette: DEFAULT_GB_PALETTE,
+    scrollEnabled: false,
     scrollAngle: 0,
     scrollSpeed: 1,
     outputWidth: 1024,
@@ -332,6 +338,12 @@ export class Store {
       }
       // the "fake game scene" pattern was removed
       if ((this.state.sourcePattern as string) === 'scene') this.state.sourcePattern = 'grid';
+      // Motion used to belong to the scrolling pattern and ran whenever its speed was above
+      // zero; it is now a choice of its own, off by default. Sessions from that window would
+      // otherwise open frozen on a pattern whose whole point is that it moves.
+      if (parsed.scrollEnabled === undefined && parsed.sourcePattern === 'scroll') {
+        this.state.scrollEnabled = true;
+      }
       if (this.state.paneCount !== 2 && this.state.paneCount !== 3) this.state.paneCount = 2;
       if (this.state.dividers.length !== this.state.paneCount - 1) {
         this.state.dividers = Store.dividersFor(this.state.paneCount);

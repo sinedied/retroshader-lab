@@ -78,6 +78,12 @@ export interface SourceImage {
   width: number;
   height: number;
   bitmap: ImageBitmap | HTMLCanvasElement | HTMLImageElement;
+  /**
+   * Whether opposite edges already match, so scrolling can wrap the image straight round.
+   * Anything else (every screenshot) has to be mirrored instead, or the wrap drags a seam
+   * through the frame.
+   */
+  tileable?: boolean;
 }
 
 export interface PipelineConfig {

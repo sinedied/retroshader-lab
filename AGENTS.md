@@ -172,6 +172,33 @@ Ported in `src/core/pipeline.ts` + `glsl-preprocess.ts` + `scaling.ts`. These ar
 - localStorage keys: `retroshader-lab:state`, `:custom-shaders`, `:user-presets`. `state.restore()`
   migrates old shapes — add a fallback there rather than breaking saved sessions.
 
+### The source, and scrolling it
+
+`rsl-app` keeps **`baseSource`** (the still image: a pattern, a screenshot, or a recoloured Game Boy
+screenshot) apart from **`source`** (what is rendered). `applyScroll()` derives one from the other,
+so motion is a property of the source rather than of any one pattern, and screenshots, uploads,
+patterns and recoloured images all scroll through the same path.
+
+- **A screenshot is not tileable**, so wrapping one directly drags a hard seam across the frame — a
+  false artifact that shaders ring on and that reads as exactly the moiré being hunted. Anything
+  without `tileable` scrolls through a **mirrored** tile instead.
+- The reflection is **whole-sample**: period `2w-2`, not `2w`. Reflecting about the gap repeats the
+  edge column (`… w-2, w-1, w-1, w-2 …`) and leaves a 2px constant band running down the frame.
+  Whole-sample gives `… w-2, w-1, w-2 …`, with nothing duplicated. Verified against an independent
+  `reflect()` and by counting duplicated columns, which must not rise above the original's own.
+- The synthetic scrolling field **is** tileable (its cell divides the resolution), so it wraps
+  straight round: mirroring a checkerboard flips its phase at the fold and manufactures a seam of a
+  different kind. That is what `tileable` on `SourceImage` selects between.
+- `scrollEnabled` is **off by default** — this is the only thing in the app that renders
+  continuously. The loop is gated on it, on speed, on a benchmark not running and on page
+  visibility, and each of those is measured, not assumed.
+- The mirrored tile is cached for **one** source at a time, keyed on `base.id`. That is safe because
+  `recolouredSource` returns `${base.id}:palette=${name}`, so a palette change is a different key —
+  and it is why the palette does not have to be re-applied per frame.
+- Speed is source pixels per **emulated** frame, stepped against a 60Hz clock rather than the
+  display's. An earlier version floored the step to at least 1 per rAF, which silently scrolled and
+  advanced `FrameCount` at double rate on a 120Hz panel.
+
 ### The comparison frame
 
 While comparing, the panes divide a rectangle measured in **export pixels** (`compareWidth` ×
@@ -256,10 +283,11 @@ app.appState; app.pipelines; app.userPresets; app.source;   // all readable
 ```
 
 Useful events: `preset-load|save|rename|update|delete`, `cfg-import`, `pass-add|remove|move|change`,
-`pass-param`, `source-system|pattern|sample|file`, `output-size`, `scaling`, `view-change`,
-`compare-change` (also carries `compareWidth|compareHeight|exportLabels`), `pane-change`,
-`shader-add-file|shader-add-url|shader-delete`, `export-png`, `toggle-panel`. Keyboard: `[` / `]`
-toggle the rails.
+`pass-param`, `source-system|pattern|sample|file`, `gb-palette`,
+`scroll-change` (carries `scrollEnabled|scrollAngle|scrollSpeed`), `output-size`, `scaling`,
+`view-change`, `compare-change` (also carries `compareWidth|compareHeight|exportLabels`),
+`pane-change`, `shader-add-file|shader-add-url|shader-delete`, `export-png`, `toggle-panel`.
+Keyboard: `[` / `]` toggle the rails.
 
 - Console should contain **only** Lit's dev-mode notice. Anything else is a regression.
 - Chrome will not resize below ~500px wide; `resize_page` clamps silently.
@@ -277,6 +305,15 @@ toggle the rails.
   comparison frame was verified: overriding `viewport.download` captures an export as a `Blob`, and
   `createImageBitmap` + `getImageData` turns "are the labels there?" into a pixel count rather than
   an opinion.
+- **A CDP tab can report `hidden`, and then `requestAnimationFrame` never fires.** It happens when
+  the tab is created while no other is focused — closing every tab first to get a clean
+  `localStorage` is enough to cause it. `Page.bringToFront` does *not* fix it;
+  `Emulation.setFocusEmulationEnabled {enabled: true}` does. This is worth knowing because it fails
+  in the most misleading way possible: anything driven by rAF reads **zero**, so a scroll loop that
+  is in fact broken looks like flawless gating, and the run "passes".
+- **Every open tab shares `localStorage` and keeps writing it.** A tab left over from an earlier
+  script is still mounted and still persisting, so it will overwrite the fixture the current script
+  just set up. Symptoms look like a restore bug in the app. Close all tabs, then set up state.
 - Benchmarking uses `EXT_disjoint_timer_query_webgl2`, and everything about it is load-bearing —
   each of these was measured, and each one produced a *wrong ranking* when absent:
   - **Never wait on an idle GPU.** A drained GPU drops its clock and the next sample measures a

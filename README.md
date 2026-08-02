@@ -33,6 +33,7 @@ The pipeline is a port of NextUI's `generic_video.c` / `ma_config.c`: identical 
 - **Stock shaders and presets** from NextUI and [perfect-retroshaders](https://github.com/sinedied/perfect-retroshaders), plus your own added from a file or a URL
 - **Shader parameters** parsed from `#pragma parameter` and snapped to NextUI's discrete steps
 - **Real game screenshots** at native resolution, generated test patterns at console resolutions, or your own image
+- **Scroll any source** at a chosen direction and speed, to catch the artifacts that only appear in motion
 - **Pixel-honest viewport** — 1:1 by default, zoom up to 16× with drag-to-pan, and PNG export at 1:1
 - **Compare up to 3 pipelines** under a movable overlay divider or as side-by-side columns that pan together
 - **Live `.cfg`** you can edit, download or load back

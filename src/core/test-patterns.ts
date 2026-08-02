@@ -207,7 +207,10 @@ export function makeGeneratedSource(system: SystemResolution, kind: PatternKind)
     label: `${system.label} — ${system.width}×${system.height}`,
     width: system.width,
     height: system.height,
-    bitmap: createTestPattern(system.width, system.height, kind)
+    bitmap: createTestPattern(system.width, system.height, kind),
+    // the scrolling field is built from a repeating cell, so at a resolution the cell divides
+    // it wraps straight round; mirroring it would flip the checkerboard phase at the fold
+    tileable: kind === 'scroll' && tilesSeamlessly(system.width, system.height)
   };
 }
 
@@ -216,36 +219,97 @@ export function tilesSeamlessly(width: number, height: number): boolean {
   return width % SCROLL_CELL === 0 && height % SCROLL_CELL === 0;
 }
 
-/** The pattern, drawn once per system so scrolling only has to blit it. */
-const tileCache = new Map<string, HTMLCanvasElement>();
+/**
+ * The mirrored tile a non-tileable source scrolls through, kept for one source at a time.
+ *
+ * Only ever one source is in motion, and a palette change makes a new id, so a single entry
+ * both hits every frame and cannot grow without bound.
+ */
+let mirrorTile: { key: string; canvas: HTMLCanvasElement } | undefined;
+
+/** Draws `img`, optionally mirrored on either axis, from a source rect to a destination point. */
+function drawPart(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  dx: number,
+  dy: number,
+  flipX: boolean,
+  flipY: boolean
+): void {
+  if (sw <= 0 || sh <= 0) return;
+  ctx.save();
+  ctx.translate(flipX ? dx + sw : dx, flipY ? dy + sh : dy);
+  ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  ctx.restore();
+}
 
 /**
- * The scrolling pattern shifted by `(offsetX, offsetY)` source pixels.
+ * Builds the reflected tile a screenshot scrolls through.
  *
- * Built the way a core builds a frame: the whole field moves by a whole number of pixels and
- * what leaves one edge arrives at the other. That is four `drawImage` calls of a cached tile
- * rather than a per-pixel redraw, which at 60fps would be far too slow for a 480×272 frame.
+ * The reflection is *whole-sample*: the period is `2w-2`, not `2w`, so the edge column is not
+ * repeated. Reflecting about the pixel (`… w-2, w-1, w-2 …`) is continuous, while reflecting
+ * about the gap (`… w-2, w-1, w-1, w-2 …`) leaves a two-pixel constant band running down the
+ * frame — exactly the sort of small artifact this lab exists to find, manufactured by the
+ * test rig itself.
+ */
+function buildMirrorTile(base: SourceImage): HTMLCanvasElement {
+  if (mirrorTile?.key === base.id) return mirrorTile.canvas;
+  const { width: w, height: h } = base;
+  const canvas = document.createElement('canvas');
+  canvas.width = mirrorPeriod(w);
+  canvas.height = mirrorPeriod(h);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2D canvas is not available');
+  ctx.imageSmoothingEnabled = false;
+  drawPart(ctx, base.bitmap, 0, 0, w, h, 0, 0, false, false);
+  drawPart(ctx, base.bitmap, 1, 0, w - 2, h, w, 0, true, false);
+  drawPart(ctx, base.bitmap, 0, 1, w, h - 2, 0, h, false, true);
+  drawPart(ctx, base.bitmap, 1, 1, w - 2, h - 2, w, h, true, true);
+  mirrorTile = { key: base.id, canvas };
+  return canvas;
+}
+
+/** Period of a whole-sample reflection, which needs at least two pixels to reflect about. */
+function mirrorPeriod(size: number): number {
+  return size > 1 ? size * 2 - 2 : size;
+}
+
+/**
+ * `base` shifted by `(offsetX, offsetY)` source pixels, wrapping at the edges.
+ *
+ * Built the way a core builds a frame: the whole framebuffer moves by a whole number of
+ * pixels and what leaves one edge arrives at the other. That is four `drawImage` calls of a
+ * cached tile rather than a per-pixel redraw, which at 60fps would be far too slow for a
+ * 480×272 frame.
+ *
+ * A screenshot's left edge does not match its right, so wrapping one directly would drag a
+ * hard seam across the frame — a false artifact that shaders ring on and that reads as the
+ * very thing this is meant to expose. Those are scrolled through a mirrored tile instead,
+ * which has no seam at all. A source that already tiles wraps straight round.
  *
  * The offset is part of `id` because the pipeline caches its source texture on that id — a
  * fixed id would upload the first frame and then quietly never update again. When a slow
  * speed leaves the offset unchanged between frames the id repeats, and skipping that upload
  * is exactly right: nothing moved.
  */
-export function makeScrollingSource(
-  system: SystemResolution,
+export function makeScrolledSource(
+  base: SourceImage,
   offsetX: number,
   offsetY: number
 ): SourceImage {
-  const { width: w, height: h } = system;
-  let tile = tileCache.get(system.id);
-  if (!tile) {
-    tile = createTestPattern(w, h, 'scroll');
-    tileCache.set(system.id, tile);
-  }
+  const { width: w, height: h } = base;
+  const tile = base.tileable ? base.bitmap : buildMirrorTile(base);
+  const periodX = base.tileable ? w : mirrorPeriod(w);
+  const periodY = base.tileable ? h : mirrorPeriod(h);
 
-  // positive offsets move the field right and down, and wrap into 0…w-1 / 0…h-1
-  const ox = ((offsetX % w) + w) % w;
-  const oy = ((offsetY % h) + h) % h;
+  // positive offsets move the image right and down, and wrap within one period
+  const ox = ((offsetX % periodX) + periodX) % periodX;
+  const oy = ((offsetY % periodY) + periodY) % periodY;
 
   const canvas = document.createElement('canvas');
   canvas.width = w;
@@ -253,12 +317,15 @@ export function makeScrollingSource(
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('2D canvas is not available');
   ctx.imageSmoothingEnabled = false;
-  // four copies: the shifted tile plus whatever wraps back in on each axis
-  for (const dx of [ox - w, ox]) for (const dy of [oy - h, oy]) ctx.drawImage(tile, dx, dy);
+  // the shifted tile plus whatever wraps back in on each axis; a period is at least as wide
+  // as the frame, so two copies per axis always cover it
+  for (const dx of [ox - periodX, ox]) for (const dy of [oy - periodY, oy]) {
+    ctx.drawImage(tile, dx, dy);
+  }
 
   return {
-    id: `${system.id}:scroll:${ox},${oy}`,
-    label: `${system.label} — ${w}×${h}`,
+    id: `${base.id}:scroll:${ox},${oy}`,
+    label: base.label,
     width: w,
     height: h,
     bitmap: canvas

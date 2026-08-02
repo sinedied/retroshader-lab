@@ -62,7 +62,7 @@ import {
   aspectOfSystem,
   loadImageSource,
   makeGeneratedSource,
-  makeScrollingSource,
+  makeScrolledSource,
   type PatternKind
 } from '../core/test-patterns.js';
 import type {
@@ -368,6 +368,11 @@ export class RslApp extends LitElement {
 
   @state() private appState: AppState = store.value;
   @state() private source: SourceImage | undefined = undefined;
+  /**
+   * The still image the source is built from, before any scrolling. Held apart from `source`
+   * so a moving frame can be rebuilt from it every tick without reloading or recolouring.
+   */
+  private baseSource: SourceImage | undefined = undefined;
   @state() private passInfos: PassRenderInfo[] = [];
   @state() private issues: CompileIssue[] = [];
   @state() private warnings: string[] = [];
@@ -426,6 +431,9 @@ export class RslApp extends LitElement {
     this.unsubscribe = store.subscribe((state) => {
       const previous = this.appState;
       this.appState = state;
+      // turning motion off has to put the still image back, and turning it on has to show
+      // the offset frame straight away rather than at the next tick
+      if (previous.scrollEnabled !== state.scrollEnabled) this.applyScroll();
       if (affectsRender(previous, state)) this.scheduleRender();
       this.syncScrollLoop();
     });
@@ -628,8 +636,7 @@ export class RslApp extends LitElement {
         .then(async (source) => {
           // the user may have moved on while the image and the palette table were loading
           if (store.value.sampleFile !== wanted) return;
-          this.source = gb ? await this.recolour(source) : source;
-          this.scheduleRender();
+          this.setBaseSource(gb ? await this.recolour(source) : source);
         })
         .catch((error: Error) => {
           this.notices = [`Could not load sample "${state.sampleFile}": ${error.message}`];
@@ -638,12 +645,34 @@ export class RslApp extends LitElement {
     }
     const system =
       SYSTEM_RESOLUTIONS.find((s) => s.id === state.sourceSystem) ?? SYSTEM_RESOLUTIONS[0];
-    this.source =
-      state.sourcePattern === 'scroll'
-        ? makeScrollingSource(system, Math.floor(this.scrollX), Math.floor(this.scrollY))
-        : makeGeneratedSource(system, state.sourcePattern);
+    this.setBaseSource(makeGeneratedSource(system, state.sourcePattern));
+  }
+
+  /**
+   * Adopts a new still image and shows it, scrolled if the source is in motion.
+   *
+   * The offset restarts whenever the image itself changes, so switching screenshot does not
+   * drop the viewer into the middle of a scroll they never asked for.
+   */
+  private setBaseSource(base: SourceImage): void {
+    if (this.baseSource?.id !== base.id) {
+      this.scrollX = 0;
+      this.scrollY = 0;
+      this.scrollAccum = 0;
+    }
+    this.baseSource = base;
+    this.applyScroll();
     this.scheduleRender();
     this.syncScrollLoop();
+  }
+
+  /** Publishes the base image, scrolled to the current offset when motion is on. */
+  private applyScroll(): void {
+    const base = this.baseSource;
+    if (!base) return;
+    this.source = this.appState.scrollEnabled
+      ? makeScrolledSource(base, Math.floor(this.scrollX), Math.floor(this.scrollY))
+      : base;
   }
 
   /**
@@ -690,9 +719,8 @@ export class RslApp extends LitElement {
     const state = this.appState;
     return (
       this.ready &&
-      !state.sampleFile &&
-      !state.uploadedName &&
-      state.sourcePattern === 'scroll' &&
+      this.baseSource !== undefined &&
+      state.scrollEnabled &&
       state.scrollSpeed > 0 &&
       !this.benchmarkRunning &&
       document.visibilityState === 'visible'
@@ -745,9 +773,7 @@ export class RslApp extends LitElement {
     this.scrollY += Math.sin(radians) * state.scrollSpeed * steps;
     this.frameCount += steps;
 
-    const system =
-      SYSTEM_RESOLUTIONS.find((s) => s.id === state.sourceSystem) ?? SYSTEM_RESOLUTIONS[0];
-    this.source = makeScrollingSource(system, Math.floor(this.scrollX), Math.floor(this.scrollY));
+    this.applyScroll();
     this.renderPipeline();
   };
 
@@ -1175,7 +1201,7 @@ export class RslApp extends LitElement {
 
   private async onSourceFile(file: File): Promise<void> {
     try {
-      this.source = await loadImageSource(file);
+      this.setBaseSource(await loadImageSource(file));
       store.update({ uploadedName: file.name, sampleFile: undefined });
       this.notices = [];
     } catch (error) {
@@ -1384,10 +1410,16 @@ export class RslApp extends LitElement {
             .sampleFile=${state.sampleFile}
             .samples=${BUNDLED_SAMPLES}
             .gbPalette=${state.gbPalette}
+            .scrollEnabled=${state.scrollEnabled}
             .scrollAngle=${state.scrollAngle}
             .scrollSpeed=${state.scrollSpeed}
-            @scroll-change=${(e: CustomEvent<{ scrollAngle?: number; scrollSpeed?: number }>) =>
-              store.update(e.detail)}
+            @scroll-change=${(
+              e: CustomEvent<{
+                scrollEnabled?: boolean;
+                scrollAngle?: number;
+                scrollSpeed?: number;
+              }>
+            ) => store.update(e.detail)}
             .paletteGroups=${this.paletteGroups}
             .isGbSample=${this.gbSampleFile !== undefined}
             @gb-palette=${(e: CustomEvent<string>) => {
@@ -1412,7 +1444,10 @@ export class RslApp extends LitElement {
               store.update({
                 sourcePattern: e.detail,
                 sampleFile: undefined,
-                uploadedName: undefined
+                uploadedName: undefined,
+                // the scrolling field exists to be seen moving, so choosing it switches
+                // motion on rather than presenting a still frame of a motion test
+                ...(e.detail === 'scroll' ? { scrollEnabled: true } : {})
               });
               this.rebuildSource();
             }}
