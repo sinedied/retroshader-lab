@@ -5,7 +5,7 @@ import { FILTERS, SCALE_TYPES, UPSCALES } from '../core/types.js';
 import type { PassConfig, PassSizes, ScaleTypeName, ShaderParam } from '../core/types.js';
 import {
   defaultValue,
-  formatParamValue,
+  deviceParamString,
   isConfigurable,
   stepCount,
   stepIndexOf
@@ -201,7 +201,7 @@ export class RslPipelinePanel extends LitElement {
           <span class="name" title=${`${param.name} — ${param.min}…${param.max} step ${param.step}`}>
             ${param.label || param.name}
           </span>
-          <span class="value">${formatParamValue(value)}${isDefault ? '' : ' •'}</span>
+          <span class="value">${deviceParamString(param, value)}${isDefault ? '' : ' •'}</span>
         </div>
         <input
           type="range"

@@ -20,7 +20,7 @@
  * Unknown keys (core options such as `gambatte_*`) are kept so a round-trip through
  * the lab does not destroy a hand-written cfg.
  */
-import { formatParamValue } from './pragma-params.js';
+import { deviceParamString } from './pragma-params.js';
 import type {
   FilterName,
   PassConfig,
@@ -220,7 +220,7 @@ export function exportCfg(options: ExportOptions): string {
       const value = pass.params[param.name];
       if (value === undefined) continue;
       written.add(param.name);
-      paramLines.push(`${param.name} = ${formatParamValue(value)}`);
+      paramLines.push(`${param.name} = ${deviceParamString(param, value)}`);
     }
   }
   if (paramLines.length > 0) {

@@ -71,6 +71,58 @@ export function formatParamValue(value: number): string {
 }
 
 /**
+ * The float NextUI computes for a step, matching its arithmetic bit for bit.
+ *
+ * `loadShaderSettings()` computes `float val = params[j].min + s * params[j].step;`, which the
+ * compiler contracts into a **fused multiply-add** — one rounding for the whole expression, not
+ * one per operation. That single rounding is why the zero step of a signed parameter lands a
+ * hair *below* zero instead of on it. Verified by compiling that exact line for arm64: with
+ * contraction (the default) `min=-1, step=0.01, s=100` gives `-0.00`, without it gives `0.00`,
+ * and the device agrees with the former.
+ *
+ * So `min` and `step` are rounded to float (as `strtof` does), the product and sum are left in
+ * double where they are exact, and the result is rounded to float once.
+ */
+export function deviceStepValue(param: ShaderParam, index: number): number {
+  return Math.fround(Math.fround(param.min) + index * Math.fround(param.step));
+}
+
+/**
+ * `snprintf("%.2f", value)` as C does it, which differs from `toFixed(2)` twice over.
+ *
+ * `printf` rounds halfway cases **to even** (`0.125` → `0.12`), while `toFixed` rounds them up,
+ * and it keeps the sign of a negative value that rounds to zero, giving `-0.00`. Both matter:
+ * the cfg is matched against these strings by `strcmp`.
+ */
+export function formatDeviceValue(value: number): string {
+  const negative = value < 0 || Object.is(value, -0);
+  // the exact decimal expansion, so a tie is recognised as a tie rather than rounded twice
+  const [whole, fraction = ''] = Math.abs(value).toFixed(30).split('.');
+  const rest = fraction.slice(2).replace(/0+$/, '');
+  let hundredths = BigInt(whole) * 100n + BigInt(fraction.slice(0, 2).padEnd(2, '0'));
+  if (rest) {
+    const roundUp = rest === '5' ? hundredths % 2n === 1n : Number(rest[0]) >= 5;
+    if (roundUp) hundredths += 1n;
+  }
+  const text = `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`;
+  return negative ? `-${text}` : text;
+}
+
+/**
+ * The exact string NextUI holds for this value, and therefore the only one it recognises.
+ *
+ * Values live in the cfg as text and are matched with `strcmp` against the generated option
+ * list; `Option_getValueIndex()` returns **0** when nothing matches, so a string that is merely
+ * close silently selects the parameter's *minimum* rather than failing. Writing anything else
+ * than this is how `pp_temperature = 0.00` became `-1.00` on device.
+ */
+export function deviceParamString(param: ShaderParam, value: number): string {
+  const count = stepCount(param);
+  if (count <= 0) return formatParamValue(value);
+  return formatDeviceValue(deviceStepValue(param, stepIndexOf(param, value)));
+}
+
+/**
  * Index selected for a value, following `loadShaderSettings()`: the first step within
  * 0.001 of the value, falling back to index 0 (the minimum) when nothing matches.
  */

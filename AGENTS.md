@@ -94,6 +94,13 @@ Then give any newly added shader a preset, update `public/shaders/NOTICE` if the
 licence of a file changed, and confirm in the browser that every shader still compiles — the Log tab
 should read "All shaders compiled".
 
+**A sync also reintroduces bad parameter values.** Upstream writes `0.00` where minarch only accepts
+`-0.00` (see "A parameter value is matched by `strcmp`" below), so `sets/GBC/Sharp.cfg` and
+`sets/GG/Sharp.cfg` come back wrong every time and have to be re-corrected until NextUI is fixed
+upstream. Load each preset in the lab and compare the cfg pane against the file, or re-run the
+parameter check — a value the device cannot match silently becomes that parameter's minimum, which
+on `temperature`/`tint` is a strongly tinted picture rather than a neutral one.
+
 **A sync can remove shaders, not only add them.** `perfect-retroshaders` folded
 `crt-perfect-v2`…`v5b` back into a single `crt-perfect`. Deleting a shader means deleting its preset
 in the same commit, or the reference check above fails — and it is worth grepping the whole tree
@@ -159,6 +166,24 @@ Ported in `src/core/pipeline.ts` + `glsl-preprocess.ts` + `scaling.ts`. These ar
   end. Looks wrong in isolation, keeps scanline/dot-matrix phase identical to the device.
 - `dst_rect`: Native/Cropped use an integer scale (floor / ceil-div), Aspect fits the core ratio,
   Fullscreen stretches. Parameters snap to `min + n*step` and serialize as `%.2f`.
+- **A parameter value is matched by `strcmp`, and a miss selects the *minimum*.** minarch turns each
+  `#pragma parameter` into a list of strings, then looks the cfg's text up in it with
+  `Option_getValueIndex()`, which **returns 0 when nothing matches** — so a value that is merely
+  close silently becomes the parameter's `min`, with no warning. `pp_temperature = 0.00` was landing
+  on `-1.00`, fully cool, rather than neutral.
+
+  The strings come from `float val = min + s*step; snprintf("%.2f", val)`, and two details decide
+  them. The expression is contracted into a **fused multiply-add**, so it rounds once, not twice,
+  and the zero step of a signed parameter lands a hair below zero and prints **`-0.00`** — a real
+  value, not a typo, and the only spelling of zero that seven of the bundled parameters accept.
+  `printf` also rounds halfway cases **to even** (`0.125` → `0.12`) where JS `toFixed` rounds up.
+
+  `deviceStepValue` / `formatDeviceValue` / `deviceParamString` in `core/pragma-params.ts` reproduce
+  this, and everything written to a cfg or shown next to a slider goes through them. Do not
+  "simplify" them back to `toFixed(2)`: measured against that C compiled for arm64, plain `toFixed`
+  is wrong on **765 of the 7732** values the repo's 77 parameters can take. The way to check a change
+  is to compile NextUI's line and diff every step of every parameter against it — reasoning about
+  float behaviour is how the first two attempts at this got it wrong.
 
 ## Codebase map
 
