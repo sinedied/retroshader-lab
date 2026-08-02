@@ -62,6 +62,7 @@ import {
   aspectOfSystem,
   loadImageSource,
   makeGeneratedSource,
+  makeScrollingSource,
   type PatternKind
 } from '../core/test-patterns.js';
 import type {
@@ -377,6 +378,18 @@ export class RslApp extends LitElement {
   @state() private notices: string[] = [];
   /** Palette table, once fetched; only Game Boy screenshots need it. */
   @state() private paletteGroups: GbPaletteGroup[] = [];
+  /** Scroll offset in source pixels, and the handle of the running animation loop. */
+  private scrollX = 0;
+  private scrollY = 0;
+  private scrollLast = 0;
+  /** Fractional 60Hz frames owed, so a faster display does not scroll faster. */
+  private scrollAccum = 0;
+  private scrollFrame: number | undefined;
+  /**
+   * Frames elapsed, for the `FrameCount` uniform. Deliberately not in the store: it changes
+   * every frame and the store persists, so it would write localStorage sixty times a second.
+   */
+  private frameCount = 0;
   @state() private shaderNotice: { ok: boolean; text: string } | undefined = undefined;
   @state() private shareResult:
     | { ok: boolean; text: string; url?: string; notes: string[]; showUrl: boolean }
@@ -414,9 +427,12 @@ export class RslApp extends LitElement {
       const previous = this.appState;
       this.appState = state;
       if (affectsRender(previous, state)) this.scheduleRender();
+      this.syncScrollLoop();
     });
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('hashchange', this.onHashChange);
+    // a hidden tab cannot be watched, so the loop must not keep the GPU busy for it
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
     await this.library.load();
     // after the library, so a shared link's custom shaders can be added and compiled
     const shared = await this.applySharedLink();
@@ -430,12 +446,18 @@ export class RslApp extends LitElement {
     // persistence only resumes once it has settled — otherwise merely opening a shared
     // link would overwrite the recipient's saved session.
     if (shared) requestAnimationFrame(() => store.resumeSaving());
+    // A restored session (or a link) can already be set to scroll. The store subscription
+    // only fires on *change*, and `ready` gates the loop, so boot has to start it itself.
+    this.syncScrollLoop();
   }
 
   override disconnectedCallback(): void {
     this.unsubscribe?.();
+    if (this.scrollFrame !== undefined) cancelAnimationFrame(this.scrollFrame);
+    this.scrollFrame = undefined;
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('hashchange', this.onHashChange);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     super.disconnectedCallback();
   }
 
@@ -444,6 +466,8 @@ export class RslApp extends LitElement {
    * same-document navigation: nothing reloads, so without this the link would appear to
    * do nothing at all.
    */
+  private readonly onVisibilityChange = (): void => this.syncScrollLoop();
+
   private readonly onHashChange = (): void => {
     void this.applySharedLink().then((applied) => {
       if (applied) requestAnimationFrame(() => store.resumeSaving());
@@ -614,8 +638,12 @@ export class RslApp extends LitElement {
     }
     const system =
       SYSTEM_RESOLUTIONS.find((s) => s.id === state.sourceSystem) ?? SYSTEM_RESOLUTIONS[0];
-    this.source = makeGeneratedSource(system, state.sourcePattern);
+    this.source =
+      state.sourcePattern === 'scroll'
+        ? makeScrollingSource(system, Math.floor(this.scrollX), Math.floor(this.scrollY))
+        : makeGeneratedSource(system, state.sourcePattern);
     this.scheduleRender();
+    this.syncScrollLoop();
   }
 
   /**
@@ -649,12 +677,88 @@ export class RslApp extends LitElement {
     });
   }
 
+  /**
+   * Whether the scrolling pattern should be animating right now.
+   *
+   * Everything about this is a stop condition. The lab renders on demand and does no work at
+   * all when left alone, which is what keeps it cool; this is the one thing that runs a
+   * continuous loop, so it only does so while there is genuinely something to see. A hidden
+   * document cannot be watched, and a benchmark drives its own render loop that this one
+   * would corrupt.
+   */
+  private get shouldScroll(): boolean {
+    const state = this.appState;
+    return (
+      this.ready &&
+      !state.sampleFile &&
+      !state.uploadedName &&
+      state.sourcePattern === 'scroll' &&
+      state.scrollSpeed > 0 &&
+      !this.benchmarkRunning &&
+      document.visibilityState === 'visible'
+    );
+  }
+
+  /** Starts or stops the scroll loop to match the current state. */
+  private syncScrollLoop(): void {
+    const wanted = this.shouldScroll;
+    if (wanted === (this.scrollFrame !== undefined)) return;
+    if (wanted) {
+      this.scrollLast = performance.now();
+      this.scrollAccum = 0;
+      this.scrollFrame = requestAnimationFrame(this.onScrollFrame);
+    } else {
+      if (this.scrollFrame !== undefined) cancelAnimationFrame(this.scrollFrame);
+      this.scrollFrame = undefined;
+    }
+  }
+
+  /**
+   * One animation step: advance the offset, rebuild the frame, and render.
+   *
+   * The offset is carried as a float and floored on use, so a speed below one pixel a frame
+   * moves the field one whole pixel every few frames rather than blurring it — a framebuffer
+   * has no sub-pixel state, and the slow crawl is where beating shows up most clearly.
+   *
+   * `frameCount` is held here rather than in the store: it changes every frame, and the
+   * store persists, so putting it there would write localStorage sixty times a second.
+   *
+   * The step is measured against a 60Hz clock rather than the display's, so speed means
+   * source pixels per *emulated* frame the way it does on the device. On a 120Hz panel that
+   * makes every other tick a no-op, which also keeps the cost the same as at 60Hz.
+   */
+  private readonly onScrollFrame = (now: number): void => {
+    this.scrollFrame = undefined;
+    if (!this.shouldScroll) return;
+    this.scrollFrame = requestAnimationFrame(this.onScrollFrame);
+
+    const state = this.appState;
+    this.scrollAccum += ((now - this.scrollLast) * 60) / 1000;
+    this.scrollLast = now;
+    // Cap catch-up after a stall, and drop the arrears rather than letting them queue up.
+    const steps = Math.min(4, Math.floor(this.scrollAccum));
+    if (steps <= 0) return;
+    this.scrollAccum = Math.min(this.scrollAccum - steps, 1);
+
+    const radians = (state.scrollAngle * Math.PI) / 180;
+    this.scrollX += Math.cos(radians) * state.scrollSpeed * steps;
+    this.scrollY += Math.sin(radians) * state.scrollSpeed * steps;
+    this.frameCount += steps;
+
+    const system =
+      SYSTEM_RESOLUTIONS.find((s) => s.id === state.sourceSystem) ?? SYSTEM_RESOLUTIONS[0];
+    this.source = makeScrollingSource(system, Math.floor(this.scrollX), Math.floor(this.scrollY));
+    this.renderPipeline();
+  };
+
   /** Compiles anything the pipeline needs, then renders both canvases. */
   /** Config of every visible pane, pane 0 being the pipeline under edit. */
   private paneConfigsForRender(): PipelineConfig[] {
     const state = this.appState;
     const paneCount = state.compareMode === 'off' ? 1 : state.paneCount;
-    const configs: PipelineConfig[] = [state.pipeline];
+    // FrameCount advances only while something is animating; on the device it counts every
+    // frame, and two bundled shaders read it (image-adjustment's grain, pixel_art_AA's iTime)
+    const configs: PipelineConfig[] = [{ ...state.pipeline, frameCount: this.frameCount }];
     for (let i = 1; i < paneCount; i++) {
       const resolved = this.paneConfigs[i - 1];
       configs.push(
@@ -663,9 +767,9 @@ export class RslApp extends LitElement {
               ...resolved,
               scaling: state.pipeline.scaling,
               coreAspect: state.pipeline.coreAspect,
-              frameCount: state.pipeline.frameCount
+              frameCount: this.frameCount
             }
-          : { ...state.pipeline, passes: [] }
+          : { ...state.pipeline, passes: [], frameCount: this.frameCount }
       );
     }
     return configs;
@@ -796,6 +900,9 @@ export class RslApp extends LitElement {
     if (targets.length === 0) return;
 
     this.benchmarkRunning = true;
+    // the benchmark renders in a tight loop of its own; a scroll loop on top would both
+    // corrupt the measurement and be measured by it
+    this.syncScrollLoop();
     this.benchmarkCancelled = false;
     this.benchmarkProgress = 0;
     this.benchmarkResults = [];
@@ -821,6 +928,7 @@ export class RslApp extends LitElement {
       this.benchmarkRunning = false;
       // the panes were re-rendered many times during the run, so restore the real frame
       this.scheduleRender();
+      this.syncScrollLoop();
     }
   }
 
@@ -1276,6 +1384,10 @@ export class RslApp extends LitElement {
             .sampleFile=${state.sampleFile}
             .samples=${BUNDLED_SAMPLES}
             .gbPalette=${state.gbPalette}
+            .scrollAngle=${state.scrollAngle}
+            .scrollSpeed=${state.scrollSpeed}
+            @scroll-change=${(e: CustomEvent<{ scrollAngle?: number; scrollSpeed?: number }>) =>
+              store.update(e.detail)}
             .paletteGroups=${this.paletteGroups}
             .isGbSample=${this.gbSampleFile !== undefined}
             @gb-palette=${(e: CustomEvent<string>) => {

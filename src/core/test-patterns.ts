@@ -37,14 +37,24 @@ export function aspectOfSystem(id: string): number {
   return SYSTEM_RESOLUTIONS.find((system) => system.id === id)?.aspect ?? 4 / 3;
 }
 
-export type PatternKind = 'grid' | 'colorbars' | 'gradient' | 'white';
+export type PatternKind = 'grid' | 'colorbars' | 'gradient' | 'white' | 'scroll';
 
 export const PATTERN_KINDS: { id: PatternKind; label: string }[] = [
   { id: 'grid', label: '1px grid & checkerboard' },
   { id: 'colorbars', label: 'Color bars & ramps' },
   { id: 'gradient', label: 'Dithered gradients' },
-  { id: 'white', label: 'Pure white' }
+  { id: 'white', label: 'Pure white' },
+  { id: 'scroll', label: 'Scrolling field (motion)' }
 ];
+
+/**
+ * Side of the repeating cell in the scrolling pattern.
+ *
+ * It has to divide the source resolution on both axes or the wrap shows a seam, and 16 is
+ * the largest value that does so for every system here — 32 already fails on the Game Boy,
+ * GBA, NES, PlayStation and PSP. Each cell holds four 8×8 blocks.
+ */
+const SCROLL_CELL = 16;
 
 function fillRect(
   ctx: CanvasRenderingContext2D,
@@ -125,6 +135,37 @@ function drawGradient(ctx: CanvasRenderingContext2D, w: number, h: number): void
   ctx.putImageData(image, 0, 0);
 }
 
+/**
+ * A field that stays legible while it moves, for hunting moiré that only appears in motion.
+ *
+ * Strictly periodic with a `SCROLL_CELL` period on both axes, so scrolling it wraps without
+ * a seam — a seam would drag a hard edge through the frame and manufacture exactly the kind
+ * of artifact this is meant to expose. Each cell carries four 8×8 blocks at the frequencies
+ * that beat against a shader's own grid — a checkerboard, vertical lines, horizontal lines
+ * and diagonals — so whichever one is moiréing can be told apart from the others.
+ */
+function drawScroll(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  const half = SCROLL_CELL / 2;
+  const image = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const cx = x % SCROLL_CELL;
+      const cy = y % SCROLL_CELL;
+      // which of the four blocks in the cell, and the 1px pattern it carries
+      let on: boolean;
+      if (cy < half) on = cx < half ? (x + y) % 2 === 0 : x % 2 === 0;
+      else on = cx < half ? y % 2 === 0 : (x + y) % 4 < 2;
+      const value = on ? 255 : 0;
+      const i = (y * w + x) * 4;
+      image.data[i] = value;
+      image.data[i + 1] = value;
+      image.data[i + 2] = value;
+      image.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
 /** Renders a pattern into a canvas of the exact system resolution. */
 export function createTestPattern(
   width: number,
@@ -150,6 +191,9 @@ export function createTestPattern(
       // what makes a mask, a grid or a scanline measurable on its own
       fillRect(ctx, 0, 0, width, height, '#ffffff');
       break;
+    case 'scroll':
+      drawScroll(ctx, width, height);
+      break;
     default:
       drawGrid(ctx, width, height);
       break;
@@ -164,6 +208,60 @@ export function makeGeneratedSource(system: SystemResolution, kind: PatternKind)
     width: system.width,
     height: system.height,
     bitmap: createTestPattern(system.width, system.height, kind)
+  };
+}
+
+/** Whether a pattern wraps without a seam at this resolution. */
+export function tilesSeamlessly(width: number, height: number): boolean {
+  return width % SCROLL_CELL === 0 && height % SCROLL_CELL === 0;
+}
+
+/** The pattern, drawn once per system so scrolling only has to blit it. */
+const tileCache = new Map<string, HTMLCanvasElement>();
+
+/**
+ * The scrolling pattern shifted by `(offsetX, offsetY)` source pixels.
+ *
+ * Built the way a core builds a frame: the whole field moves by a whole number of pixels and
+ * what leaves one edge arrives at the other. That is four `drawImage` calls of a cached tile
+ * rather than a per-pixel redraw, which at 60fps would be far too slow for a 480×272 frame.
+ *
+ * The offset is part of `id` because the pipeline caches its source texture on that id — a
+ * fixed id would upload the first frame and then quietly never update again. When a slow
+ * speed leaves the offset unchanged between frames the id repeats, and skipping that upload
+ * is exactly right: nothing moved.
+ */
+export function makeScrollingSource(
+  system: SystemResolution,
+  offsetX: number,
+  offsetY: number
+): SourceImage {
+  const { width: w, height: h } = system;
+  let tile = tileCache.get(system.id);
+  if (!tile) {
+    tile = createTestPattern(w, h, 'scroll');
+    tileCache.set(system.id, tile);
+  }
+
+  // positive offsets move the field right and down, and wrap into 0…w-1 / 0…h-1
+  const ox = ((offsetX % w) + w) % w;
+  const oy = ((offsetY % h) + h) % h;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2D canvas is not available');
+  ctx.imageSmoothingEnabled = false;
+  // four copies: the shifted tile plus whatever wraps back in on each axis
+  for (const dx of [ox - w, ox]) for (const dy of [oy - h, oy]) ctx.drawImage(tile, dx, dy);
+
+  return {
+    id: `${system.id}:scroll:${ox},${oy}`,
+    label: `${system.label} — ${w}×${h}`,
+    width: w,
+    height: h,
+    bitmap: canvas
   };
 }
 

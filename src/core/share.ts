@@ -76,6 +76,9 @@ interface SharePayload {
   sf?: string | null;
   /** Gambatte palette applied to a Game Boy screenshot. */
   gp?: string;
+  /** Scroll direction and speed of the motion pattern. */
+  sa?: number;
+  ssp?: number;
   /** Output size. */
   ow?: number;
   oh?: number;
@@ -238,6 +241,8 @@ function buildPayload(input: ShareInput): SharePayload {
   if (state.sourcePattern !== base.sourcePattern) payload.sp = state.sourcePattern;
   if (state.sampleFile !== base.sampleFile) payload.sf = state.sampleFile ?? null;
   if (state.gbPalette !== base.gbPalette) payload.gp = state.gbPalette;
+  if (state.scrollAngle !== base.scrollAngle) payload.sa = state.scrollAngle;
+  if (state.scrollSpeed !== base.scrollSpeed) payload.ssp = state.scrollSpeed;
   if (state.outputWidth !== base.outputWidth) payload.ow = state.outputWidth;
   if (state.outputHeight !== base.outputHeight) payload.oh = state.outputHeight;
 
@@ -395,6 +400,8 @@ export async function decodeShare(encoded: string): Promise<DecodedShare> {
   if (payload.sp !== undefined) patch.sourcePattern = payload.sp as AppState['sourcePattern'];
   if (payload.sf !== undefined) patch.sampleFile = payload.sf ?? undefined;
   if (typeof payload.gp === 'string') patch.gbPalette = payload.gp;
+  if (typeof payload.sa === 'number') patch.scrollAngle = payload.sa;
+  if (typeof payload.ssp === 'number') patch.scrollSpeed = payload.ssp;
   if (payload.ow !== undefined) patch.outputWidth = payload.ow;
   if (payload.oh !== undefined) patch.outputHeight = payload.oh;
 

@@ -86,6 +86,18 @@ export class RslSourcePanel extends LitElement {
         gap: 8px;
       }
 
+      /* the two scroll sliders sit under the pattern picker, spanning its column */
+      .scroll {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .scroll label b {
+        color: var(--phosphor);
+        font-weight: 500;
+      }
+
       /* the group label is short, the palette names are long, so give them the room */
       .palette {
         display: grid;
@@ -109,6 +121,8 @@ export class RslSourcePanel extends LitElement {
   @property({ type: Number }) coreAspect = 4 / 3;
   @property({ attribute: false }) collapsed: Record<string, boolean> = {};
   @property({ type: String }) gbPalette = '';
+  @property({ type: Number }) scrollAngle = 0;
+  @property({ type: Number }) scrollSpeed = 1;
   @property({ attribute: false }) paletteGroups: GbPaletteGroup[] = [];
   /** Whether the selected screenshot is a Game Boy one, the only kind that recolours. */
   @property({ type: Boolean }) isGbSample = false;
@@ -222,6 +236,57 @@ export class RslSourcePanel extends LitElement {
     `;
   }
 
+  /**
+   * Direction and speed for the scrolling pattern, shown only when it is selected.
+   *
+   * Speed is in source pixels per frame because that is how a game scrolls: below 1 the field
+   * moves a whole pixel every few frames, which is the crawl that makes beating obvious.
+   */
+  private renderScrollControls() {
+    if (this.pattern !== 'scroll') return nothing;
+    const arrow = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'][
+      Math.round(((this.scrollAngle % 360) + 360) % 360 / 45) % 8
+    ];
+    return html`
+      <div class="scroll">
+        <div>
+          <label for="scroll-dir">Direction <b>${arrow} ${this.scrollAngle}°</b></label>
+          <input
+            id="scroll-dir"
+            name="scroll-angle"
+            type="range"
+            min="0"
+            max="315"
+            step="45"
+            .value=${String(this.scrollAngle)}
+            @input=${(e: Event) =>
+              this.emit('scroll-change', {
+                scrollAngle: Number((e.target as HTMLInputElement).value)
+              })}
+          />
+        </div>
+        <div>
+          <label for="scroll-speed">
+            Speed <b>${this.scrollSpeed === 0 ? 'still' : `${this.scrollSpeed} px/frame`}</b>
+          </label>
+          <input
+            id="scroll-speed"
+            name="scroll-speed"
+            type="range"
+            min="0"
+            max="8"
+            step="0.25"
+            .value=${String(this.scrollSpeed)}
+            @input=${(e: Event) =>
+              this.emit('scroll-change', {
+                scrollSpeed: Number((e.target as HTMLInputElement).value)
+              })}
+          />
+        </div>
+      </div>
+    `;
+  }
+
   private renderThumb() {
     const bitmap = this.source?.bitmap;
     if (!bitmap) return nothing;
@@ -326,6 +391,7 @@ export class RslSourcePanel extends LitElement {
                   )}
                 </select>
               </div>
+              ${this.renderScrollControls()}
             </div>
           </div>
 

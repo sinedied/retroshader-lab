@@ -38,6 +38,10 @@ export interface AppState {
   uploadedName: string | undefined;
   /** Gambatte palette applied to the Game Boy screenshots, which ship as greyscale masters. */
   gbPalette: string;
+  /** Scroll direction of the motion pattern, in degrees: 0 moves right, 90 moves down. */
+  scrollAngle: number;
+  /** Scroll speed of the motion pattern, in source pixels per frame. 0 holds it still. */
+  scrollSpeed: number;
 
   outputWidth: number;
   outputHeight: number;
@@ -99,6 +103,8 @@ export function defaultState(): AppState {
     // the shade the bundled screenshots were already recoloured to, so the default look is
     // exactly what it was before palettes could be chosen
     gbPalette: DEFAULT_GB_PALETTE,
+    scrollAngle: 0,
+    scrollSpeed: 1,
     outputWidth: 1024,
     outputHeight: 768,
     pipeline: {
