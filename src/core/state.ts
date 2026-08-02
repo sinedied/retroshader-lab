@@ -317,6 +317,10 @@ export class Store {
         pan: { ...base.pan, ...parsed.pan },
         panes: (parsed.panes ?? base.panes).slice(0, 2) as [ComparePane, ComparePane],
         collapsed: { ...parsed.collapsed },
+        // `undefined` is dropped by JSON.stringify, so an absent key means the user cleared
+        // the sample — spreading would let the default screenshot override that and undo
+        // every pattern choice on reload.
+        sampleFile: 'sampleFile' in parsed ? parsed.sampleFile : undefined,
         // an uploaded image cannot be restored, fall back to a generated pattern
         uploadedName: undefined
       };
